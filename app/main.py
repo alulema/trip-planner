@@ -2,7 +2,7 @@
 
 No auth and no TLS here by design: the app is meant to run behind a reverse proxy /
 gateway that terminates TLS and authenticates users. It is stateless — every run lives
-only for the duration of its request.
+only for the duration of its request. The LLM is a local Ollama server (OLLAMA_HOST).
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import contextlib
 import json
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -21,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from .config import load_settings
+from .decisions import build_decision_engine
 from .guardrails import Admission, GuardrailError
 from .llm_client import build_llm
 from .models import SharedContext, UserRequest
@@ -33,7 +35,17 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 KEEPALIVE_SECONDS = 10
 
 settings = load_settings()
-app = FastAPI(title="Trip Planner — Chain-of-Agents demo", docs_url=None, redoc_url=None)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load the model in the background so the server answers health checks immediately.
+    warmup = asyncio.create_task(app.state.llm.warmup())
+    yield
+    warmup.cancel()
+
+
+app = FastAPI(title="Trip Planner — Chain-of-Agents demo", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.state.settings = settings
 app.state.admission = Admission(
@@ -41,7 +53,8 @@ app.state.admission = Admission(
     global_per_hour=settings.max_sessions_per_hour,
     max_concurrent=settings.max_concurrent_sessions,
 )
-app.state.llm = build_llm(settings.llm_mode, settings.domain_model, settings.mock_latency_ms)
+app.state.llm = build_llm(settings.llm_mode, settings.ollama_host, settings.ollama_model, settings.mock_latency_ms)
+app.state.engine = build_decision_engine(settings.decision_engine)
 
 
 @app.get("/", include_in_schema=False)
@@ -51,7 +64,8 @@ async def index() -> FileResponse:
 
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "project": settings.project_id, "slot": settings.demo_slot}
+    return {"status": "ok", "project": settings.project_id, "slot": settings.demo_slot,
+            "llm_ready": app.state.llm.ready}
 
 
 @app.get("/api/config")
@@ -59,7 +73,9 @@ async def config() -> dict[str, Any]:
     """Public, non-secret settings the UI displays (mode badge, limits)."""
     return {
         "llm_mode": settings.llm_mode,
-        "model": settings.domain_model if settings.llm_mode != "mock" else None,
+        "model": app.state.llm.model,
+        "llm_ready": app.state.llm.ready,
+        "decision_engine": app.state.engine.name,
         "max_days": 7,
         "max_tokens_per_session": settings.max_tokens_per_session,
         "max_conflict_iterations": settings.max_conflict_iterations,
@@ -127,8 +143,8 @@ async def _run_chain(request: Request, user_request: UserRequest) -> AsyncIterat
 
     ctx = SharedContext(session_id=str(uuid.uuid4()), user_request=user_request)
     queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
-    orchestrator = Orchestrator(request.app.state.llm, settings.max_tokens_per_session,
-                                settings.max_conflict_iterations)
+    orchestrator = Orchestrator(request.app.state.llm, request.app.state.engine,
+                                settings.max_tokens_per_session, settings.max_conflict_iterations)
 
     async def emit(event: str, data: dict[str, Any]) -> None:
         await queue.put((event, data))

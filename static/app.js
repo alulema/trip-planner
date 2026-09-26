@@ -22,6 +22,9 @@
       over: "Excede presupuesto", working: "En curso", season: "Temporada", areas: "Zonas",
       conflictTitle: "Resolución de conflictos", iteration: "iteración", draft: "borrador", revision: "revisión",
       tokens: "tokens", mock: "modo offline (simulado)", disconnected: "Conexión interrumpida.",
+      ev_decision: "decide", generating: "generando…", warming: "cargando modelo…", rules: "reglas",
+      q_category: "categoría de", q_harm: "¿afecta los intereses?", q_plan: "¿el plan conserva los intereses?",
+      decisionsBy: "decisiones", profile: "Intereses", adjusted: "ajustado",
     },
     en: {
       subtitle: "A chain of agents plans your trip, live",
@@ -41,9 +44,12 @@
       over: "Over budget", working: "Working", season: "Season", areas: "Areas",
       conflictTitle: "Conflict resolution", iteration: "iteration", draft: "draft", revision: "revision",
       tokens: "tokens", mock: "offline mode (simulated)", disconnected: "Connection lost.",
+      ev_decision: "decides", generating: "generating…", warming: "loading model…", rules: "rules",
+      q_category: "category of", q_harm: "hurts interests?", q_plan: "plan still matches interests?",
+      decisionsBy: "decisions", profile: "Interests", adjusted: "adjusted",
     },
   };
-  const ICON = { started: "⏳", completed: "✅", conflict_detected: "⚠️", failed: "❌", skipped: "⏭️", plan_created: "🧭", finished: "🏁" };
+  const ICON = { decision: "🎯", started: "⏳", completed: "✅", conflict_detected: "⚠️", failed: "❌", skipped: "⏭️", plan_created: "🧭", finished: "🏁" };
 
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => {
@@ -77,7 +83,8 @@
       tokenLimit = cfg.max_tokens_per_session;
       const badge = $("mode-badge");
       badge.hidden = false;
-      badge.textContent = cfg.llm_mode === "mock" ? t("mock") : cfg.model;
+      const llm = cfg.llm_mode === "mock" ? t("mock") : cfg.model + (cfg.llm_ready ? "" : ` (${t("warming")})`);
+      badge.textContent = `${llm} · ${t("decisionsBy")}: ${t(cfg.decision_engine)}`;
       badge.dataset.mode = cfg.llm_mode;
     } catch (_) { /* optional */ }
   }
@@ -87,7 +94,7 @@
   function resetUI() {
     $("trace").replaceChildren();
     $("days").replaceChildren();
-    ["research", "budget-box", "conflict-box", "summary", "status-pill"].forEach((id) => { $(id).hidden = true; });
+    ["profile", "research", "budget-box", "conflict-box", "summary", "status-pill"].forEach((id) => { $(id).hidden = true; });
     $("result-empty").hidden = false;
     $("token-meter").textContent = "";
     document.querySelectorAll("#chain li").forEach((li) => { li.className = ""; });
@@ -107,16 +114,26 @@
     li.append(el("span", "icon", ICON[entry.event] || "•"), el("span", "t", `+${secs}s`));
     const body = el("span");
     body.append(el("span", "agent", t("a_" + entry.agent)), document.createTextNode(" " + t("ev_" + entry.event)));
+    if (entry.decision) body.append(el("span", "msg", " · " + describeDecision(entry.decision)));
     const extra = [];
     if (entry.message) extra.push(entry.message);
     if (entry.duration_ms != null) extra.push((entry.duration_ms / 1000).toFixed(1) + "s");
     if (entry.tokens) extra.push(`${entry.tokens} ${t("tokens")}`);
     if (extra.length) body.append(el("span", "msg", " · " + extra.join(" · ")));
+    if (entry.event === "started") {
+      const prog = el("span", "msg progress");
+      body.append(prog);
+      liveLines[entry.agent] = prog;
+    }
     li.append(body);
     $("trace").append(li);
     $("trace").scrollTop = $("trace").scrollHeight;
 
     // Chain strip state.
+    if (entry.event === "completed" || entry.event === "failed") {
+      if (liveLines[entry.agent]) liveLines[entry.agent].textContent = "";
+      delete liveLines[entry.agent];
+    }
     if (entry.event === "started") setChain(entry.agent, "working");
     else if (entry.event === "completed") setChain(entry.agent, "done");
     else if (entry.event === "failed") setChain(entry.agent, "failed");
@@ -125,6 +142,39 @@
     else if (entry.event === "finished") setChain("orchestrator", "done");
 
     if (entry.agent === "orchestrator" && entry.tokens) updateMeter(entry.tokens);
+  }
+
+  // Typed decisions (rules today, Jev-ready): question → answer (probability · source).
+  function describeDecision(d) {
+    const [kind, subject] = d.question.includes(":") ? d.question.split(/:(.*)/s) : [d.question, ""];
+    const src = t(d.source);
+    if (kind === "category") {
+      const p = d.probabilities[d.answer] ?? 0;
+      return `${t("q_category")} «${subject}» → ${d.answer} (p=${p.toFixed(2)} · ${src})`;
+    }
+    if (kind === "harm") return `${subject}: ${t("q_harm")} p=${Number(d.answer).toFixed(2)} (${src})`;
+    if (kind === "plan_matches_interests") return `${t("q_plan")} p=${Number(d.answer).toFixed(2)} (${src})`;
+    return `${d.question} → ${d.answer} (${src})`;
+  }
+
+  const liveLines = {};
+  function onProgress(p) {
+    const line = liveLines[p.agent];
+    if (line) line.textContent = ` · ${t("generating")} ${p.tokens} ${t("tokens")}`;
+  }
+
+  function onToken(tok) {
+    const s = $("summary");
+    if (s.hidden) { s.textContent = ""; s.hidden = false; s.classList.add("streaming"); }
+    s.textContent += tok.text;
+  }
+
+  function renderProfile(p) {
+    if (!p || !p.matches.length) return;
+    const box = $("profile");
+    box.replaceChildren(el("span", null, `${t("profile")}: `));
+    p.matches.forEach((m) => box.append(el("span", "chip", `${m.interest} → ${m.category}`)));
+    box.hidden = false;
   }
 
   let tokensSoFar = 0;
@@ -155,7 +205,9 @@
         const head = el("header");
         const title = el("span", null, `${t("day")} ${d.day} · `);
         title.append(el("span", "area", d.area));
-        head.append(title, el("span", "cost", `${usd(d.estimated_cost_usd)} ${t("activities")}`));
+        const cost = el("span", "cost", `${usd(d.estimated_cost_usd)} ${t("activities")}`);
+        if (d.adjusted) cost.prepend(el("span", "tag", t("adjusted")));
+        head.append(title, cost);
         const ul = el("ul");
         d.activities.forEach((a) => ul.append(el("li", null, a)));
         li.append(head, ul);
@@ -200,6 +252,7 @@
     const s = $("summary");
     s.textContent = f.summary;
     s.hidden = false;
+    s.classList.remove("streaming");
     const pill = $("status-pill");
     pill.hidden = false;
     pill.className = "pill " + (f.within_budget ? "ok" : "over");
@@ -249,12 +302,15 @@
     source.addEventListener("section", (e) => {
       const { key, value } = JSON.parse(e.data);
       if (!value) return;
-      if (key === "destination_research") renderResearch(value);
+      if (key === "interest_profile") renderProfile(value);
+      else if (key === "destination_research") renderResearch(value);
       else if (key === "itinerary_draft") renderDraft(value);
       else if (key === "budget_analysis") renderBudget(value, budgetUsd);
       else if (key === "conflict_resolution") renderConflict(value);
       else if (key === "final_itinerary") renderFinal(value);
     });
+    source.addEventListener("progress", (e) => onProgress(JSON.parse(e.data)));
+    source.addEventListener("token", (e) => onToken(JSON.parse(e.data)));
     source.addEventListener("done", (e) => {
       const ctx = JSON.parse(e.data);
       const total = Object.values(ctx.token_usage || {}).reduce((s, u) => s + u.input_tokens + u.output_tokens, 0);

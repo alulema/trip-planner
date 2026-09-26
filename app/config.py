@@ -1,8 +1,8 @@
 """Runtime settings, read once from environment variables.
 
-Secrets (ANTHROPIC_API_KEY) are only ever read from the environment — never baked into
-the image. Every cost guardrail has a conservative default so a fresh container is safe
-to expose publicly without extra configuration.
+Every guardrail has a conservative default so a fresh container is safe to expose
+publicly without extra configuration. Inference is local and CPU-bound, so the limits
+protect compute time rather than an API bill.
 """
 
 from __future__ import annotations
@@ -21,10 +21,13 @@ class Settings:
     project_id: str
     demo_slot: str
 
-    # "anthropic" calls the real API; "mock" returns canned, deterministic agent output
-    # (no network, no cost) — useful for local UI work and for the test suite.
+    # "ollama" calls the local model server; "mock" returns canned, deterministic agent
+    # output (no model needed) — useful for UI work and for the test suite.
     llm_mode: str
-    domain_model: str
+    ollama_host: str
+    ollama_model: str
+    # Engine for the non-generative decisions (see app/decisions). Only "rules" today.
+    decision_engine: str
 
     max_sessions_per_hour: int
     max_requests_per_ip_per_hour: int
@@ -36,18 +39,19 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    default_mode = "anthropic" if has_key else "mock"
     return Settings(
         project_id=os.environ.get("PROJECT_ID", "trip-planner"),
         demo_slot=os.environ.get("DEMO_SLOT", ""),
-        llm_mode=os.environ.get("LLM_MODE", default_mode).strip().lower(),
-        domain_model=os.environ.get("DOMAIN_MODEL", "claude-haiku-4-5"),
+        llm_mode=os.environ.get("LLM_MODE", "ollama").strip().lower(),
+        ollama_host=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
+        ollama_model=os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b-instruct"),
+        decision_engine=os.environ.get("DECISION_ENGINE", "rules").strip().lower(),
         max_sessions_per_hour=_int("MAX_SESSIONS_PER_HOUR", 30),
         max_requests_per_ip_per_hour=_int("MAX_REQUESTS_PER_IP_PER_HOUR", 10),
-        max_concurrent_sessions=_int("MAX_CONCURRENT_SESSIONS", 3),
-        max_tokens_per_session=_int("MAX_TOKENS_PER_SESSION", 8000),
-        chain_timeout_seconds=_int("CHAIN_TIMEOUT_SECONDS", 45),
+        # One CPU-bound generation at a time: concurrent runs would just slow each other down.
+        max_concurrent_sessions=_int("MAX_CONCURRENT_SESSIONS", 1),
+        max_tokens_per_session=_int("MAX_TOKENS_PER_SESSION", 6000),
+        chain_timeout_seconds=_int("CHAIN_TIMEOUT_SECONDS", 180),
         # Hard cap from the design: the Itinerary↔Budget↔Conflict loop never runs more
         # than twice. Clamped so it can't be raised by configuration.
         max_conflict_iterations=min(_int("MAX_CONFLICT_ITERATIONS", 2), 2),

@@ -1,4 +1,4 @@
-"""1. Destination Research Agent — season notes, areas to stay in and reference costs."""
+"""1. Destination Research Agent (generative) — season notes, areas and reference costs."""
 
 from __future__ import annotations
 
@@ -6,51 +6,57 @@ import math
 from datetime import datetime, timezone
 
 from ..guardrails import TokenBudget
-from ..llm_client import LLMClient
+from ..llm_client import LLMClient, OnProgress
 from ..models import DestinationResearch, DestinationResearchOutput, ReferenceCosts, SharedContext, TokenUsage
 from . import compact, language_rule
 
-SYSTEM = """You are a travel destination research agent in a multi-agent trip planner.
-Given a destination, trip length and the (approximate) travel month, produce:
-- season_notes: weather/season considerations in 1-2 sentences,
-- recommended_areas: 2-3 neighbourhoods or zones to stay in or explore,
-- realistic reference costs in USD:
-  lodging_per_night_usd = a mid-range room for the WHOLE party per night,
-  meal_avg_usd = one typical meal for ONE person,
-  local_transport_day_usd = local transport for ONE person per day,
-- agent_notes: one short sentence stating these are general AI estimates, not live prices.
-Do not invent sources. Be concise."""
+SYSTEM = """You are a travel research agent. Reply with JSON only.
+Given a destination, trip length and approximate travel month, return:
+- season_notes: weather/season advice, one short sentence.
+- recommended_areas: 3 real neighbourhoods or zones of the destination.
+- lodging_per_night_usd: a mid-range room for the whole group, per night.
+- meal_avg_usd: one typical meal for one person.
+- local_transport_day_usd: local transport for one person per day.
+Use realistic numbers in US dollars."""
+
+AGENT_NOTES = {
+    "es": "Estimaciones generales de un modelo de IA local, no tarifas en tiempo real.",
+    "en": "General estimates from a local AI model, not live prices.",
+}
+
+# Sanity bounds for numbers coming from a small model (USD).
+LIMITS = {"lodging": (8, 1500), "meal": (1, 150), "transport": (0, 100)}
 
 
-async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget) -> tuple[DestinationResearch, TokenUsage]:
+def _bound(value: float, key: str) -> float:
+    lo, hi = LIMITS[key]
+    return round(min(hi, max(lo, value)), 2)
+
+
+async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
+              on_progress: OnProgress | None = None) -> tuple[DestinationResearch, TokenUsage]:
     req = ctx.user_request
-    month = datetime.now(timezone.utc).strftime("%B")
     user = compact({
         "destination": req.destination,
         "days": req.days,
-        "travelers": req.travelers,
-        "interests": req.interests,
-        "approx_travel_month": month,
+        "group_size": req.travelers,
+        "travel_month": datetime.now(timezone.utc).strftime("%B"),
     }) + "\n" + language_rule(req)
 
-    out, usage = await llm.complete(
-        agent="destination_research",
-        system=SYSTEM,
-        user=user,
-        output_model=DestinationResearchOutput,
-        max_tokens=600,
-        budget=budget,
-        mock=lambda: _mock(ctx),
+    out, usage = await llm.complete_json(
+        agent="destination_research", system=SYSTEM, user=user, output_model=DestinationResearchOutput,
+        max_tokens=260, budget=budget, mock=lambda: _mock(ctx), on_progress=on_progress,
     )
+    areas = [a.strip() for a in out.recommended_areas if a.strip()][:3] or [req.destination]
     section = DestinationResearch(
-        season_notes=out.season_notes,
-        recommended_areas=out.recommended_areas[:3],
+        season_notes=out.season_notes.strip(),
+        recommended_areas=areas,
         reference_costs=ReferenceCosts(
-            lodging_per_night_usd=max(0.0, out.lodging_per_night_usd),
-            meal_avg_usd=max(0.0, out.meal_avg_usd),
-            local_transport_day_usd=max(0.0, out.local_transport_day_usd),
+            lodging_per_night_usd=_bound(out.lodging_per_night_usd, "lodging"),
+            meal_avg_usd=_bound(out.meal_avg_usd, "meal"),
+            local_transport_day_usd=_bound(out.local_transport_day_usd, "transport"),
         ),
-        agent_notes=out.agent_notes,
+        agent_notes=AGENT_NOTES[req.lang],
     )
     return section, usage
 
@@ -69,8 +75,4 @@ def _mock(ctx: SharedContext) -> DestinationResearchOutput:
         lodging_per_night_usd=85 * rooms,
         meal_avg_usd=14,
         local_transport_day_usd=9,
-        agent_notes=(
-            "Datos simulados (modo offline): estimaciones genéricas, no tarifas reales."
-            if es else "Simulated data (offline mode): generic estimates, not live prices."
-        ),
     )

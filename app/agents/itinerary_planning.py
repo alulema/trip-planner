@@ -1,11 +1,16 @@
-"""2. Itinerary Planning Agent — day-by-day plan grouped by area, with cost estimates.
+"""2. Itinerary Planning Agent.
 
-Also re-invoked by the conflict loop with concrete revision instructions."""
+`run` is generative and happens ONCE: one small-model call writes the day-by-day plan,
+including a free alternative per day. `revise` is deterministic: it applies the budget
+actions chosen by conflict resolution (swap in the free alternatives, lower the daily cost
+assumptions) without generating anything — "generate once, decide many times"."""
 
 from __future__ import annotations
 
+from ..decisions.rules import normalize
+from ..decisions.taxonomy import FOOD_CUT, FREE_ALTERNATIVE_COST_USD, LODGING_CUT, TRANSPORT_CUT
 from ..guardrails import TokenBudget
-from ..llm_client import LLMClient
+from ..llm_client import LLMClient, OnProgress
 from ..models import (
     CostAssumptions,
     ItineraryDay,
@@ -17,117 +22,115 @@ from ..models import (
 )
 from . import compact, language_rule
 
-SYSTEM = """You are an itinerary planning agent in a multi-agent trip planner.
-Using the destination research already done, build a day-by-day itinerary that matches the
-traveller's interests and groups activities by area to minimise transfers.
+SYSTEM = """You are an itinerary planning agent. Reply with JSON only.
+Plan the trip day by day for the traveller's interests, grouping activities by area.
 Rules:
-- Exactly one entry per trip day, numbered from 1. 2-4 short activities per day.
-- estimated_cost_usd per day = paid activities / entrance fees for the WHOLE party only
-  (not lodging, not food, not local transport).
-- Also commit to daily cost assumptions for the WHOLE party, starting from the reference costs:
-  lodging_per_night_usd, food_per_day_usd, transport_per_day_usd.
-- planner_notes: one short sentence about your approach.
-If you receive a "budget revision" block, apply those actions: swap paid activities for free
-or cheaper ones and/or lower the daily assumptions, never removing days or ignoring the main
-interests."""
+- One entry per day, numbered from 1, for exactly the requested number of days.
+- area: one of the given areas.
+- activities: 2 or 3 short activities (max 8 words each).
+- estimated_cost_usd: entrance fees and paid activities for the whole group that day
+  (not lodging, not meals, not transport). Use 0 if everything is free.
+- free_alternative: one free activity in the same area that could replace the paid ones."""
+
+# Words that suggest an activity costs nothing (kept when paid ones are swapped out).
+FREE_HINTS = ("free", "gratis", "gratuit", "walk", "paseo", "caminar", "stroll", "park", "parque",
+              "market", "mercado", "viewpoint", "mirador", "beach", "playa", "garden", "jardin")
 
 
-async def run(
-    ctx: SharedContext,
-    llm: LLMClient,
-    budget: TokenBudget,
-    revision_actions: list[str] | None = None,
-) -> tuple[ItineraryDraft, TokenUsage]:
+async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
+              on_progress: OnProgress | None = None) -> tuple[ItineraryDraft, TokenUsage]:
     req = ctx.user_request
     research = ctx.destination_research
     assert research is not None, "destination research must run first"
-    prev = ctx.itinerary_draft
-    revision = (prev.revision + 1) if (prev and revision_actions) else 0
+    user = compact({
+        "destination": req.destination,
+        "days": req.days,
+        "group_size": req.travelers,
+        "interests": req.interests,
+        "areas": research.recommended_areas,
+    }) + "\n" + language_rule(req)
 
-    payload = {
-        "request": req.model_dump(exclude={"lang"}),
-        "research": {
-            "recommended_areas": research.recommended_areas,
-            "reference_costs": research.reference_costs.model_dump(),
-        },
-    }
-    if revision_actions and prev and ctx.budget_analysis:
-        payload["budget_revision"] = {
-            "over_budget_by_usd": ctx.budget_analysis.over_budget_by_usd,
-            "actions": revision_actions,
-            "current_itinerary": {
-                "days": [d.model_dump() for d in prev.days],
-                "cost_assumptions": prev.cost_assumptions.model_dump(),
-            },
-        }
-    user = compact(payload) + "\n" + language_rule(req)
-
-    out, usage = await llm.complete(
-        agent="itinerary_planning",
-        system=SYSTEM,
-        user=user,
-        output_model=ItineraryPlanningOutput,
-        max_tokens=250 + 170 * req.days,
-        budget=budget,
-        mock=lambda: _mock(ctx, revision),
+    out, usage = await llm.complete_json(
+        agent="itinerary_planning", system=SYSTEM, user=user, output_model=ItineraryPlanningOutput,
+        max_tokens=120 + 110 * req.days, budget=budget, mock=lambda: _mock(ctx), on_progress=on_progress,
     )
-    return _normalize(out, ctx, revision), usage
+    return _normalize(out, ctx), usage
 
 
-def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext, revision: int) -> ItineraryDraft:
-    """Force the draft into shape: exactly `days` entries, non-negative costs, and the
-    research reference costs as fallback if the model left an assumption at zero."""
+def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDraft:
+    """Force the draft into shape (exactly `days` entries, sane costs) and derive the daily
+    cost assumptions from the research reference costs — arithmetic stays in code."""
     req = ctx.user_request
     ref = ctx.destination_research.reference_costs  # type: ignore[union-attr]
+    max_day_cost = 250.0 * req.travelers
     by_day = {d.day: d for d in out.days}
     ordered = sorted(out.days, key=lambda d: d.day)
     days = []
     for n in range(1, req.days + 1):
         src = by_day.get(n) or (ordered[n - 1] if n - 1 < len(ordered) else None)
         if src is None:
-            src = ItineraryDayOutput(day=n, area=ordered[-1].area if ordered else req.destination,
-                                     activities=[], estimated_cost_usd=0)
-        days.append(ItineraryDay(day=n, area=src.area, activities=src.activities[:5],
-                                 estimated_cost_usd=round(max(0.0, src.estimated_cost_usd), 2)))
-
-    def pick(value: float, fallback: float) -> float:
-        return round(value if value > 0 else fallback, 2)
-
+            area = ordered[-1].area if ordered else req.destination
+            src = ItineraryDayOutput(day=n, area=area, activities=[], estimated_cost_usd=0, free_alternative="")
+        days.append(ItineraryDay(
+            day=n,
+            area=src.area.strip() or req.destination,
+            activities=[a.strip() for a in src.activities if a.strip()][:4],
+            estimated_cost_usd=round(min(max_day_cost, max(0.0, src.estimated_cost_usd)), 2),
+            free_alternative=src.free_alternative.strip(),
+        ))
     return ItineraryDraft(
         days=days,
         cost_assumptions=CostAssumptions(
-            lodging_per_night_usd=pick(out.lodging_per_night_usd, ref.lodging_per_night_usd),
-            food_per_day_usd=pick(out.food_per_day_usd, ref.meal_avg_usd * 3 * req.travelers),
-            transport_per_day_usd=pick(out.transport_per_day_usd, ref.local_transport_day_usd * req.travelers),
+            lodging_per_night_usd=ref.lodging_per_night_usd,
+            food_per_day_usd=round(ref.meal_avg_usd * 3 * req.travelers, 2),
+            transport_per_day_usd=round(ref.local_transport_day_usd * req.travelers, 2),
         ),
-        revision=revision,
-        planner_notes=out.planner_notes,
+        revision=0,
+        planner_notes="",
     )
 
 
-def _mock(ctx: SharedContext, revision: int) -> ItineraryPlanningOutput:
+def revise(ctx: SharedContext, action_ids: list[str]) -> tuple[ItineraryDraft, TokenUsage]:
+    """Apply preset budget actions to the current draft. No LLM call."""
+    draft = ctx.itinerary_draft
+    assert draft is not None
+    days = [d.model_copy(deep=True) for d in draft.days]
+    a = draft.cost_assumptions.model_copy()
+    for action in action_ids:
+        if action == "free_alternatives":
+            for d in days:
+                if d.estimated_cost_usd > 0 and d.free_alternative:
+                    kept = [x for x in d.activities if any(h in normalize(x) for h in FREE_HINTS)]
+                    d.activities = [d.free_alternative, *kept][:4]
+                    d.estimated_cost_usd = FREE_ALTERNATIVE_COST_USD
+                    d.adjusted = True
+                elif d.estimated_cost_usd > 0:
+                    d.estimated_cost_usd = round(d.estimated_cost_usd / 2, 2)
+                    d.adjusted = True
+        elif action == "cheaper_lodging":
+            a.lodging_per_night_usd = round(a.lodging_per_night_usd * (1 - LODGING_CUT), 2)
+        elif action == "street_food":
+            a.food_per_day_usd = round(a.food_per_day_usd * (1 - FOOD_CUT), 2)
+        elif action == "transit_pass":
+            a.transport_per_day_usd = round(a.transport_per_day_usd * (1 - TRANSPORT_CUT), 2)
+    revised = ItineraryDraft(days=days, cost_assumptions=a, revision=draft.revision + 1,
+                             planner_notes=", ".join(action_ids))
+    return revised, TokenUsage()
+
+
+def _mock(ctx: SharedContext) -> ItineraryPlanningOutput:
     req = ctx.user_request
-    ref = ctx.destination_research.reference_costs  # type: ignore[union-attr]
     areas = ctx.destination_research.recommended_areas or [req.destination]  # type: ignore[union-attr]
     es = req.lang == "es"
     interests = req.interests or (["cultura", "gastronomía"] if es else ["culture", "food"])
-    # Each revision halves paid activities and trims lodging/food, like a real planner would.
-    factor = 0.5 ** revision
     days = []
     for n in range(1, req.days + 1):
         topic = interests[(n - 1) % len(interests)]
-        if revision:
-            acts = ([f"Paseo gratuito por {areas[(n - 1) % len(areas)]}", f"Actividad económica de {topic}"]
-                    if es else [f"Free walk around {areas[(n - 1) % len(areas)]}", f"Budget {topic} activity"])
-        else:
-            acts = ([f"Visita guiada de {topic}", f"Experiencia local de {topic}", "Cena en restaurante recomendado"]
-                    if es else [f"Guided {topic} visit", f"Local {topic} experience", "Dinner at a recommended spot"])
-        days.append(ItineraryDayOutput(day=n, area=areas[(n - 1) % len(areas)], activities=acts,
-                                       estimated_cost_usd=round(35 * req.travelers * factor, 2)))
-    return ItineraryPlanningOutput(
-        days=days,
-        lodging_per_night_usd=round(ref.lodging_per_night_usd * (0.75 ** revision), 2),
-        food_per_day_usd=round(ref.meal_avg_usd * 3 * req.travelers * (0.8 ** revision), 2),
-        transport_per_day_usd=round(ref.local_transport_day_usd * req.travelers, 2),
-        planner_notes=("Plan simulado agrupado por zonas." if es else "Simulated plan grouped by area."),
-    )
+        area = areas[(n - 1) % len(areas)]
+        acts = ([f"Visita guiada de {topic}", f"Experiencia local de {topic}", "Paseo por el mercado"]
+                if es else [f"Guided {topic} visit", f"Local {topic} experience", "Stroll through the market"])
+        days.append(ItineraryDayOutput(
+            day=n, area=area, activities=acts, estimated_cost_usd=35 * req.travelers,
+            free_alternative=(f"Recorrido a pie gratuito por {area}" if es else f"Free walking route around {area}"),
+        ))
+    return ItineraryPlanningOutput(days=days)

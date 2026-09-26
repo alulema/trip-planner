@@ -9,9 +9,9 @@ deleted.
 Two kinds of models live here:
 
 * Contract models (`UserRequest`, `DestinationResearch`, ...) — the shape of the context.
-* `*Output` models — the exact JSON each LLM agent must return. They are kept free of
-  numeric constraints so they translate cleanly into structured-output JSON schemas;
-  sanity checks happen in Python after parsing.
+* `*Output` models — the exact JSON the generative agents must return. They are kept small
+  (a CPU model pays for every token) and free of numeric constraints so they translate
+  cleanly into JSON schemas; sanity checks happen in Python after parsing.
 """
 
 from __future__ import annotations
@@ -30,7 +30,9 @@ AgentName = Literal[
     "synthesis",
 ]
 
-TraceEvent = Literal["plan_created", "started", "completed", "conflict_detected", "skipped", "failed", "finished"]
+TraceEvent = Literal[
+    "plan_created", "started", "completed", "decision", "conflict_detected", "skipped", "failed", "finished"
+]
 
 
 def utc_now_iso() -> str:
@@ -70,6 +72,29 @@ class UserRequest(BaseModel):
 # --------------------------------------------------------------------------- sections
 
 
+class DecisionRecord(BaseModel):
+    """One typed decision taken by the decision engine (rules today, Jev-ready)."""
+
+    question: str
+    answer: str | float
+    probabilities: dict[str, float]
+    source: str
+
+
+class InterestMatch(BaseModel):
+    interest: str
+    category: str
+    probability: float
+
+
+class InterestProfile(BaseModel):
+    matches: list[InterestMatch]
+
+    @property
+    def categories(self) -> list[str]:
+        return sorted({m.category for m in self.matches})
+
+
 class ReferenceCosts(BaseModel):
     """Reference costs in USD: lodging for the whole party per night; one meal for one
     person; local transport for one person per day."""
@@ -93,12 +118,15 @@ class ItineraryDay(BaseModel):
     # Activities / entrance fees / experiences for the whole party. Lodging, food and
     # local transport are costed separately through `CostAssumptions`.
     estimated_cost_usd: float = 0
+    # Generated up front so a budget revision can swap it in without another LLM call.
+    free_alternative: str = ""
+    adjusted: bool = False
 
 
 class CostAssumptions(BaseModel):
-    """Daily costs the planner commits to (whole party). Revisions may lower them —
-    e.g. cheaper lodging or more street food — which is how conflict resolution can
-    act on more than just the activity list."""
+    """Daily costs for the whole party, derived by code from the reference costs. Budget
+    revisions lower them (cheaper lodging, street food, transit passes), which is how
+    conflict resolution acts on more than the activity list."""
 
     lodging_per_night_usd: float = 0
     food_per_day_usd: float = 0
@@ -130,7 +158,9 @@ class BudgetAnalysis(BaseModel):
 class ConflictResolution(BaseModel):
     triggered: bool = False
     iterations: int = 0
-    actions_taken: list[str] = Field(default_factory=list)
+    actions_taken: list[str] = Field(default_factory=list)  # human-readable
+    applied_action_ids: list[str] = Field(default_factory=list)
+    decisions: list[DecisionRecord] = Field(default_factory=list)
     resolved: bool | None = None
 
 
@@ -150,6 +180,7 @@ class TraceEntry(BaseModel):
     duration_ms: int | None = None
     message: str | None = None
     tokens: int | None = None
+    decision: DecisionRecord | None = None
 
 
 class TokenUsage(BaseModel):
@@ -164,6 +195,7 @@ class TokenUsage(BaseModel):
 class SharedContext(BaseModel):
     session_id: str
     user_request: UserRequest
+    interest_profile: InterestProfile | None = None
     destination_research: DestinationResearch | None = None
     itinerary_draft: ItineraryDraft | None = None
     budget_analysis: BudgetAnalysis | None = None
@@ -187,7 +219,6 @@ class DestinationResearchOutput(BaseModel):
     lodging_per_night_usd: float
     meal_avg_usd: float
     local_transport_day_usd: float
-    agent_notes: str
 
 
 class ItineraryDayOutput(BaseModel):
@@ -195,19 +226,8 @@ class ItineraryDayOutput(BaseModel):
     area: str
     activities: list[str]
     estimated_cost_usd: float
+    free_alternative: str
 
 
 class ItineraryPlanningOutput(BaseModel):
     days: list[ItineraryDayOutput]
-    lodging_per_night_usd: float
-    food_per_day_usd: float
-    transport_per_day_usd: float
-    planner_notes: str
-
-
-class ConflictResolutionOutput(BaseModel):
-    actions_taken: list[str]
-
-
-class SynthesisOutput(BaseModel):
-    summary: str

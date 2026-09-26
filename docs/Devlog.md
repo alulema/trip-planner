@@ -99,3 +99,70 @@ solo debe tolerar un corte abrupto (stateless, arranque en ~1 s). Por eso
       package de GHCR como **Public**.
 - [ ] Entregar el hand-off manifest (`docs/HANDOFF.md`) al mantenedor de la infra.
 - [ ] Capturas del panel de trace para el post.
+
+---
+
+## 2026-09-26 — Sesión 2: pivote a Qwen 2.5 (Ollama) + motor de decisiones estilo JEV
+
+### Decisiones
+
+1. **Adiós Anthropic, hola Qwen 2.5 local.** Pedido explícito. Se descartó **Phi**: es un
+   modelo de Microsoft y el contrato prohíbe tecnología Microsoft en el stack interno. Qwen 2.5
+   ya está validado en la infra (rag-blogposts). Default `qwen2.5:1.5b-instruct` (0.5b es ~3×
+   más rápido pero redacta peor; configurable con `OLLAMA_MODEL`).
+2. **JEV detrás de una interfaz, implementado con reglas.** JEV (TypeSafe) es API alojada,
+   pesos cerrados, early access con waitlist, sin self-host; y además su web/docs están
+   bloqueados desde el sandbox. Se diseñó `app/decisions/` con su forma: estado + preguntas
+   tipadas (`choice`/`score`) → respuestas con probabilidades. Cada pregunta trae `family`
+   (para despachar reglas) y `text` en lenguaje natural (lo que evaluaría Jev). Hoy:
+   `RulesDecisionEngine` (taxonomía de palabras clave es/en + heurísticas). Enchufar Jev =
+   implementar `evaluate()`. Ojo con lo documentado de Jev: no hace aritmética ni genera texto →
+   el presupuesto sigue en Python (el README original decía "Budget Agent (JEV + Python)", error).
+3. **"Generar una vez, decidir muchas".** En CPU cada token cuesta segundos. Cambios:
+   - El itinerario se genera **una sola vez** y trae `free_alternative` por día.
+   - Resolución de conflictos ya **no usa LLM**: catálogo fijo de acciones
+     (`free_alternatives`, `cheaper_lodging`, `street_food`, `transit_pass`); el código calcula
+     el ahorro, el motor puntúa P(daña intereses), se ordena por `ahorro × (1 − P)` y se toman
+     las mínimas que cierran la brecha (máx. 2 por iteración).
+   - La revisión del itinerario la aplica **código** (`itinerary_planning.revise`), sin generar.
+   - `cost_assumptions` ahora se derivan en código de los costos de referencia (antes los
+     proponía el LLM).
+   - Nuevo paso **intake**: clasifica intereses en la taxonomía (decisiones visibles en trace).
+   - **Validación** tras cada revisión: "¿el plan sigue respetando los intereses?" (score).
+     Útil y honesto: con el catálogo actual, cambiar actividades de pago por paseos gratuitos
+     baja esa probabilidad (se ve en el trace).
+   - Síntesis en **streaming token a token** (evento SSE `token`); progreso de generación JSON
+     (evento `progress`) para que la espera en CPU no parezca colgada.
+4. **Cliente Ollama propio sobre httpx** (sin SDK): `/api/chat` con `stream: true`, `format` =
+   JSON schema de Pydantic con `$ref` inlineados (`inline_refs`), `num_predict` recortado al
+   presupuesto de tokens, `keep_alive` 30m, 1 reintento si el JSON no valida. Warmup en
+   segundo plano al arrancar (`llm_ready` en `/api/health` y `/api/config`).
+5. **Guardrails re-calibrados para CPU:** 6000 tokens/viaje (prompt + generados: ambos cuestan
+   tiempo), timeout 180 s, **1 cadena concurrente** (la inferencia se serializa).
+6. **Dos imágenes:** app (`Dockerfile`) + `ollama/Dockerfile` con Qwen horneado (sin descarga
+   al arrancar). `docker-compose.yml` para local; workflow publica ambas en GHCR.
+   Números del modelo acotados a rangos sensatos en código (un 1.5B puede delirar precios).
+
+### Verificación
+
+- 34 tests offline: reglas (clasificación, daño, match), cadena (loop sin tokens, convergencia
+  con la acción de mayor utilidad, acción dañina rankeada abajo, catálogo agotado, fallback por
+  tokens y por fallo del LLM en síntesis), cliente Ollama contra un servidor falso NDJSON
+  (streaming, usage, progreso, reintento, 404, conexión caída, guard de tokens), API/SSE.
+- UI en Chromium (modo mock): decisiones con probabilidades, perfil de intereses, días
+  "ajustado", resumen escribiéndose en vivo.
+- **Integración con Ollama real** (contenedor `ollama/ollama:0.12.3` + app en contenedor): la app
+  conecta, el warmup detecta el modelo faltante y la cadena falla limpia con `chain_failed`.
+- **No se pudo descargar Qwen** en el sandbox: `registry.ollama.ai` y `huggingface.co` están
+  bloqueados por la política de red. Tampoco se pudo construir `ollama/Dockerfile` aquí.
+
+### Pendiente
+
+- [ ] **Correr con Qwen real** (`docker compose up --build` en una máquina con red): medir
+      latencia por paso en ~2 vCPU, tokens reales por viaje (objetivo < 6000), calidad del JSON
+      del 1.5B (¿cumple exactamente N días?, ¿areas reales?) y ajustar prompts/`num_predict`.
+- [ ] Validar que Ollama 0.12.x acepta el schema inlineado como `format` sin quejarse.
+- [ ] Decidir 1.5b vs 0.5b según la latencia medida.
+- [ ] Cuando haya acceso a Jev: `JevDecisionEngine.evaluate()` + `DECISION_ENGINE=jev`
+      (necesita `TYPESAFE_API_KEY` como secreto y salida a la red).
+- [ ] Ampliar catálogo de acciones (p.ej. reducir un día de actividades pagas en vez de todos).

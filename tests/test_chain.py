@@ -1,36 +1,36 @@
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 
 from app.agents import budget as budget_agent
-from app.guardrails import TokenBudget, TokenBudgetExceeded
-from app.llm_client import AnthropicLLM, LLMError, MockLLM
-from app.models import (
-    CostAssumptions,
-    DestinationResearchOutput,
-    ItineraryDay,
-    ItineraryDraft,
-    SharedContext,
-    UserRequest,
-)
+from app.agents import conflict_resolution
+from app.decisions import build_decision_engine
+from app.decisions.taxonomy import ACTION_CATALOG
+from app.llm_client import LLMError, MockLLM
+from app.models import CostAssumptions, ItineraryDay, ItineraryDraft, SharedContext, UserRequest
 from app.orchestrator import ChainError, Orchestrator
 
+ENGINE = build_decision_engine("rules")
 
-def make_ctx(budget_usd=1200, days=5, travelers=1, lang="es"):
+
+def make_ctx(budget_usd=1200, days=5, travelers=1, interests=("food", "temples"), lang="es"):
     req = UserRequest(destination="Kyoto", days=days, budget_usd=budget_usd, travelers=travelers,
-                      interests=["food", "temples"], lang=lang)
+                      interests=list(interests), lang=lang)
     return SharedContext(session_id="test", user_request=req)
 
 
-async def run_chain(ctx, llm=None, token_limit=8000):
+async def run_chain(ctx, llm=None, token_limit=6000):
     events = []
 
     async def emit(event, data):
         events.append((event, data))
 
-    await Orchestrator(llm or MockLLM(0), token_limit).run(ctx, emit)
+    await Orchestrator(llm or MockLLM(0), ENGINE, token_limit).run(ctx, emit)
     return events
+
+
+def traces(events, event=None):
+    return [d for e, d in events if e == "trace" and (event is None or d["event"] == event)]
 
 
 def test_budget_is_deterministic_arithmetic():
@@ -50,121 +50,89 @@ def test_budget_is_deterministic_arithmetic():
     assert a.over_budget_by_usd == 60 and not a.within_budget
 
 
-def test_happy_path_runs_every_agent_without_conflict():
+def test_happy_path_runs_every_step_without_conflict():
     ctx = make_ctx(budget_usd=5000)
     events = asyncio.run(run_chain(ctx))
-    agents = {d["agent"] for e, d in events if e == "trace"}
+    agents = {d["agent"] for d in traces(events)}
     assert agents == {"orchestrator", "destination_research", "itinerary_planning", "budget", "synthesis"}
     assert not ctx.conflict_resolution.triggered
-    assert ctx.final_itinerary.within_budget
-    assert len(ctx.final_itinerary.days) == 5
-    # Sections stream progressively, in chain order.
+    assert ctx.final_itinerary.within_budget and len(ctx.final_itinerary.days) == 5
     keys = [d["key"] for e, d in events if e == "section"]
-    assert keys == ["destination_research", "itinerary_draft", "budget_analysis", "final_itinerary"]
+    assert keys == ["interest_profile", "destination_research", "itinerary_draft", "budget_analysis", "final_itinerary"]
+    # Interests were classified by the decision engine, visible in the trace.
+    assert [m.category for m in ctx.interest_profile.matches] == ["food", "religion_heritage"]
+    assert len(traces(events, "decision")) == 2
+    # Generation progress and the streamed narrative reach the client.
+    assert any(e == "progress" for e, _ in events)
+    streamed = "".join(d["text"] for e, d in events if e == "token")
+    assert streamed == ctx.final_itinerary.summary
 
 
-def test_unrealistic_budget_triggers_bounded_conflict_loop():
+def test_unrealistic_budget_triggers_bounded_conflict_loop_without_generation():
     ctx = make_ctx(budget_usd=50)
     events = asyncio.run(run_chain(ctx))
     c = ctx.conflict_resolution
     assert c.triggered and c.iterations == 2 and c.resolved is False
     assert ctx.itinerary_draft.revision == 2
     assert ctx.final_itinerary.within_budget is False
-    assert sum(1 for e, d in events if e == "trace" and d["event"] == "conflict_detected") == 2
-    assert ctx.token_usage["conflict_resolution"].total > 0
+    assert len(traces(events, "conflict_detected")) == 2
+    # The loop is decisions + arithmetic: no tokens spent by conflict resolution or revisions.
+    assert "conflict_resolution" not in ctx.token_usage
+    assert ctx.token_usage["itinerary_planning"].total > 0  # only the initial generation
+    assert len(c.applied_action_ids) == len(set(c.applied_action_ids)) == 4
+    assert all(d.source == "rules" for d in c.decisions)
 
 
-def test_conflict_loop_can_converge():
-    # 5-day mock plan costs ~$855 first, ~$620 after one revision.
+def test_conflict_loop_converges_with_the_highest_utility_action():
+    # Mock plan: 5 days → lodging 425 + food 210 + activities 175 + transport 45 = 855.
     ctx = make_ctx(budget_usd=700)
     asyncio.run(run_chain(ctx))
     c = ctx.conflict_resolution
-    assert c.triggered and c.iterations == 1 and c.resolved is True
-    assert ctx.final_itinerary.within_budget
+    assert c.iterations == 1 and c.resolved is True
+    assert c.applied_action_ids == ["free_alternatives"]  # saves 175 and hurts neither food nor temples
+    assert all(d.adjusted and d.estimated_cost_usd == 0 for d in ctx.final_itinerary.days)
+    assert ctx.final_itinerary.total_cost_usd == 680
 
 
-def test_token_budget_exhaustion_falls_back_honestly():
-    # Enough for research + itinerary, not for the conflict loop or synthesis.
+def test_harmful_action_is_ranked_down():
+    # A museum lover: swapping paid entrances for free walks should lose to cheaper lodging.
+    ctx = make_ctx(budget_usd=780, interests=("museos",))
+    asyncio.run(run_chain(ctx))
+    assert ctx.conflict_resolution.applied_action_ids[0] == "cheaper_lodging"
+
+
+def test_catalog_exhaustion_returns_empty_plan():
     ctx = make_ctx(budget_usd=50)
-    events = asyncio.run(run_chain(ctx, token_limit=1300))
-    assert ctx.final_itinerary is not None
-    assert ctx.final_itinerary.within_budget is False
-    assert any(d.get("message", "").startswith("conflict loop stopped") for e, d in events if e == "trace")
-    assert "USD" in ctx.final_itinerary.summary  # deterministic template summary
-    assert ctx.total_tokens <= 1300
+    asyncio.run(run_chain(ctx))
+    ctx.conflict_resolution.applied_action_ids = [a.id for a in ACTION_CATALOG]
+    plan = asyncio.run(conflict_resolution.run(ctx, ENGINE))
+    assert plan.action_ids == [] and plan.decisions == []
+
+
+def test_token_budget_exhaustion_falls_back_to_template():
+    probe = make_ctx(budget_usd=5000)
+    asyncio.run(run_chain(probe))
+    needed = probe.token_usage["destination_research"].total + probe.token_usage["itinerary_planning"].total
+    ctx = make_ctx(budget_usd=5000)
+    events = asyncio.run(run_chain(ctx, token_limit=needed + 100))
+    assert "synthesis" not in ctx.token_usage
+    assert any(d.get("message") == "template fallback (no LLM)" for d in traces(events))
+    assert "USD" in ctx.final_itinerary.summary
 
 
 def test_chain_error_when_mandatory_step_cannot_run():
-    ctx = make_ctx()
     with pytest.raises(ChainError):
-        asyncio.run(run_chain(ctx, token_limit=100))
+        asyncio.run(run_chain(make_ctx(), token_limit=100))
 
 
-class FlakyConflictLLM(MockLLM):
-    async def complete(self, *, agent, **kw):
-        if agent == "conflict_resolution":
-            raise LLMError("boom")
-        return await super().complete(agent=agent, **kw)
+class BrokenSynthesisLLM(MockLLM):
+    async def complete_text(self, **kw):
+        raise LLMError("model crashed")
 
 
-def test_llm_failure_in_conflict_loop_keeps_last_valid_draft():
+def test_llm_failure_in_synthesis_keeps_an_honest_result():
     ctx = make_ctx(budget_usd=50)
-    events = asyncio.run(run_chain(ctx, llm=FlakyConflictLLM(0)))
-    assert ctx.final_itinerary is not None and not ctx.final_itinerary.within_budget
-    assert ctx.itinerary_draft.revision == 0
-    assert any(e == "trace" and d["event"] == "failed" for e, d in events)
-
-
-# ---------------------------------------------------------------- Anthropic wrapper
-
-
-class FakeMessages:
-    def __init__(self, texts):
-        self.texts = list(texts)
-        self.calls = 0
-
-    async def create(self, **kw):
-        self.calls += 1
-        text = self.texts.pop(0)
-        return SimpleNamespace(
-            content=[SimpleNamespace(type="text", text=text)],
-            usage=SimpleNamespace(input_tokens=100, output_tokens=50),
-            stop_reason="end_turn",
-        )
-
-
-def _llm_with(texts):
-    llm = AnthropicLLM("claude-haiku-4-5")
-    llm._client = SimpleNamespace(messages=FakeMessages(texts))
-    return llm
-
-
-VALID = DestinationResearchOutput(season_notes="s", recommended_areas=["a"], lodging_per_night_usd=1,
-                                  meal_avg_usd=1, local_transport_day_usd=1, agent_notes="n").model_dump_json()
-
-
-def call(llm, budget):
-    return asyncio.run(llm.complete(agent="t", system="s", user="u", output_model=DestinationResearchOutput,
-                                    max_tokens=500, budget=budget, mock=lambda: None))
-
-
-def test_invalid_json_is_retried_once_and_usage_counted():
-    llm = _llm_with(["not json", VALID])
-    budget = TokenBudget(8000)
-    out, usage = call(llm, budget)
-    assert out.season_notes == "s"
-    assert llm._client.messages.calls == 2
-    assert usage.total == 300 and budget.used == 300
-
-
-def test_invalid_json_twice_raises():
-    llm = _llm_with(["nope", "{}"])
-    with pytest.raises(LLMError):
-        call(llm, TokenBudget(8000))
-
-
-def test_budget_guard_blocks_calls_before_spending():
-    llm = _llm_with([VALID])
-    with pytest.raises(TokenBudgetExceeded):
-        call(llm, TokenBudget(100))
-    assert llm._client.messages.calls == 0
+    events = asyncio.run(run_chain(ctx, llm=BrokenSynthesisLLM(0)))
+    assert traces(events, "failed")[0]["agent"] == "synthesis"
+    assert ctx.final_itinerary.within_budget is False
+    assert "excede" in ctx.final_itinerary.summary

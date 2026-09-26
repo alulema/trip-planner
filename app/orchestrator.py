@@ -4,9 +4,14 @@ The orchestrator does no domain work. It owns the `SharedContext` (the shared me
 decides the next step, runs one agent at a time, merges the section that agent returns and
 emits a trace event before and after every step — that stream is what the UI renders live.
 
-Control flow is deterministic (cheaper and easier to debug than an LLM controller):
+Reasoning is split in two kinds, and each step uses the cheapest one that does the job:
+  * generative (local Qwen via Ollama): research, the itinerary (once), the final narrative;
+  * non-generative (decision engine: rules today, Jev-ready): interest classification,
+    choosing budget cuts, validating the revised plan; plus plain Python for arithmetic.
 
-    research → itinerary → budget → [conflict → itinerary(revision) → budget] ×≤2 → synthesis
+Control flow is deterministic:
+
+    intake → research → itinerary → budget → [conflict → revise → budget]×≤2 → synthesis
 """
 
 from __future__ import annotations
@@ -16,10 +21,11 @@ import time
 from typing import Any, Awaitable, Callable
 
 from .agents import budget as budget_agent
-from .agents import conflict_resolution, destination_research, itinerary_planning, synthesis
+from .agents import conflict_resolution, destination_research, interests, itinerary_planning, synthesis
+from .decisions import DecisionEngine
 from .guardrails import TokenBudget, TokenBudgetExceeded
 from .llm_client import LLMClient, LLMError
-from .models import AgentName, SharedContext, TokenUsage, TraceEntry, TraceEvent
+from .models import AgentName, DecisionRecord, SharedContext, TokenUsage, TraceEntry, TraceEvent
 
 log = logging.getLogger("trip_planner.orchestrator")
 
@@ -31,8 +37,9 @@ class ChainError(Exception):
 
 
 class Orchestrator:
-    def __init__(self, llm: LLMClient, token_limit: int, max_conflict_iterations: int = 2):
+    def __init__(self, llm: LLMClient, engine: DecisionEngine, token_limit: int, max_conflict_iterations: int = 2):
         self.llm = llm
+        self.engine = engine
         self.token_limit = token_limit
         self.max_conflict_iterations = max_conflict_iterations
 
@@ -44,9 +51,17 @@ class Orchestrator:
             ctx.trace.append(entry)
             await emit("trace", entry.model_dump(exclude_none=True))
 
+        async def decision(agent: AgentName, record: DecisionRecord) -> None:
+            await trace(agent, "decision", decision=record)
+
         async def section(key: str) -> None:
             value = getattr(ctx, key)
             await emit("section", {"key": key, "value": value.model_dump() if value is not None else None})
+
+        def progress(agent: str) -> Callable[[int], Awaitable[None]]:
+            async def cb(tokens: int) -> None:
+                await emit("progress", {"agent": agent, "tokens": tokens})
+            return cb
 
         def add_usage(agent: str, usage: TokenUsage) -> None:
             total = ctx.token_usage.setdefault(agent, TokenUsage())
@@ -72,17 +87,23 @@ class Orchestrator:
             await trace("budget", "completed", duration_ms=_ms(t0), tokens=0, message=label)
             await section("budget_analysis")
 
-        loop_note = f"max {self.max_conflict_iterations} conflict iterations, {self.token_limit} tokens"
-        await trace("orchestrator", "plan_created",
-                    message=f"research → itinerary → budget → [conflict loop] → synthesis ({loop_note})")
+        await trace("orchestrator", "plan_created", message=(
+            f"intake → research → itinerary → budget → [conflict loop ≤{self.max_conflict_iterations}] → synthesis"
+            f" · llm={self.llm.model} · decisions={self.engine.name} · {self.token_limit} tokens"))
 
-        # 1-2. Mandatory steps: without research and a draft there is nothing to show.
+        # 0. Intake: typed decisions, no generation.
+        ctx.interest_profile, records = await interests.classify(ctx, self.engine)
+        for rec in records:
+            await decision("orchestrator", rec)
+        await section("interest_profile")
+
+        # 1-2. Mandatory generative steps: without research and a draft there is nothing to show.
         try:
-            ctx.destination_research = await step(
-                "destination_research", lambda: destination_research.run(ctx, self.llm, budget))
+            ctx.destination_research = await step("destination_research", lambda: destination_research.run(
+                ctx, self.llm, budget, on_progress=progress("destination_research")))
             await section("destination_research")
-            ctx.itinerary_draft = await step(
-                "itinerary_planning", lambda: itinerary_planning.run(ctx, self.llm, budget))
+            ctx.itinerary_draft = await step("itinerary_planning", lambda: itinerary_planning.run(
+                ctx, self.llm, budget, on_progress=progress("itinerary_planning")))
             await section("itinerary_draft")
         except (LLMError, TokenBudgetExceeded) as exc:
             raise ChainError(str(exc)) from exc
@@ -90,7 +111,7 @@ class Orchestrator:
         # 3. Deterministic budget check.
         await run_budget()
 
-        # 4. Bounded conflict loop.
+        # 4. Bounded conflict loop — decisions + arithmetic, no generation.
         conflict = ctx.conflict_resolution
         while ctx.budget_analysis.over_budget_by_usd > 0 and conflict.iterations < self.max_conflict_iterations:
             await trace("orchestrator", "conflict_detected",
@@ -98,29 +119,40 @@ class Orchestrator:
             conflict.triggered = True
             conflict.iterations += 1
             label = f"iteration {conflict.iterations}/{self.max_conflict_iterations}"
-            try:
-                actions = await step("conflict_resolution",
-                                     lambda: conflict_resolution.run(ctx, self.llm, budget), label)
-                conflict.actions_taken.extend(actions)
-                await section("conflict_resolution")
-                ctx.itinerary_draft = await step(
-                    "itinerary_planning",
-                    lambda: itinerary_planning.run(ctx, self.llm, budget, revision_actions=actions),
-                    f"revision {conflict.iterations}")
-                await section("itinerary_draft")
-            except (LLMError, TokenBudgetExceeded) as exc:
-                # Keep the last valid draft and be honest about it instead of failing.
-                await trace("orchestrator", "skipped", message=f"conflict loop stopped: {exc}")
+
+            await trace("conflict_resolution", "started", message=label)
+            t0 = time.perf_counter()
+            plan = await conflict_resolution.run(ctx, self.engine)
+            for rec in plan.decisions:
+                await decision("conflict_resolution", rec)
+            conflict.decisions.extend(plan.decisions)
+            if not plan.action_ids:
+                await trace("conflict_resolution", "skipped", duration_ms=_ms(t0),
+                            message="no actions left in the catalog")
                 break
+            conflict.applied_action_ids.extend(plan.action_ids)
+            conflict.actions_taken.extend(plan.descriptions)
+            await trace("conflict_resolution", "completed", duration_ms=_ms(t0), tokens=0,
+                        message=f"{label}: {', '.join(plan.action_ids)} (≈ −${plan.expected_savings_usd:,.0f})")
+            await section("conflict_resolution")
+
+            ctx.itinerary_draft = await step(
+                "itinerary_planning", lambda: _sync(itinerary_planning.revise(ctx, plan.action_ids)),
+                f"revision {conflict.iterations} (applied by code, no LLM)")
+            await section("itinerary_draft")
+            await decision("orchestrator", await interests.plan_matches(ctx, self.engine))
             await run_budget(f"re-check {conflict.iterations}")
 
         if conflict.triggered:
             conflict.resolved = ctx.budget_analysis.within_budget
             await section("conflict_resolution")
 
-        # 5. Synthesis (falls back to a deterministic summary if the LLM can't run).
+        # 5. Synthesis, streamed token by token (template fallback if the model can't run).
+        async def on_token(text: str) -> None:
+            await emit("token", {"agent": "synthesis", "text": text})
+
         try:
-            ctx.final_itinerary = await step("synthesis", lambda: synthesis.run(ctx, self.llm, budget))
+            ctx.final_itinerary = await step("synthesis", lambda: synthesis.run(ctx, self.llm, budget, on_token))
         except (LLMError, TokenBudgetExceeded):
             ctx.final_itinerary = synthesis.build_final(ctx, synthesis.fallback_summary(ctx))
             await trace("synthesis", "completed", message="template fallback (no LLM)", tokens=0)
@@ -133,6 +165,10 @@ class Orchestrator:
                  {k: v.total for k, v in ctx.token_usage.items()}, ctx.total_tokens,
                  ctx.final_itinerary.within_budget)
         return ctx
+
+
+async def _sync(value):
+    return value
 
 
 def _ms(t0: float) -> int:

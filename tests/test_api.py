@@ -31,7 +31,8 @@ def test_index_and_health(client):
     assert "Trip Planner" in client.get("/").text
     assert client.get("/api/health").json()["status"] == "ok"
     assert client.get("/static/app.js").status_code == 200
-    assert client.get("/api/config").json()["llm_mode"] == "mock"
+    cfg = client.get("/api/config").json()
+    assert cfg["llm_mode"] == "mock" and cfg["decision_engine"] == "rules"
 
 
 def test_stream_happy_path(client):

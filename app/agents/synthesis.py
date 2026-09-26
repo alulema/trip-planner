@@ -1,51 +1,43 @@
-"""5. Synthesis Agent — warm, readable summary of the final plan.
+"""5. Synthesis Agent (generative) — a short, warm narrative streamed token by token.
 
 The structured part of `final_itinerary` (days, totals, within_budget) is copied from the
-context by code; the LLM only writes the narrative. If the token budget is exhausted, a
-deterministic template is used instead so the user still gets an honest result."""
+context by code; the model only writes prose. If it can't run (token budget exhausted,
+model error), a deterministic template is used so the user still gets an honest result."""
 
 from __future__ import annotations
 
 from ..guardrails import TokenBudget
-from ..llm_client import LLMClient
-from ..models import FinalItinerary, SharedContext, SynthesisOutput, TokenUsage
+from ..llm_client import LLMClient, OnToken
+from ..models import FinalItinerary, SharedContext, TokenUsage
 from . import compact, language_rule
 
-SYSTEM = """You are the synthesis agent in a multi-agent trip planner. Write a warm, clear
-trip summary (2-3 short paragraphs, max 150 words, plain text, no lists, no markdown) from the
-structured data. If a budget adjustment happened, say so transparently and mention what changed.
-If the plan is still over budget, state it honestly with the gap in USD and suggest the
-traveller raise the budget or shorten the trip. Costs are AI estimates, not live prices."""
+SYSTEM = """You write the final summary of a trip plan. Plain text, no lists, no markdown,
+2 short paragraphs, at most 90 words. Be warm and concrete. If the budget was adjusted, say
+what changed. If the plan is still over budget, say so honestly with the gap in USD. Costs
+are AI estimates, not live prices."""
 
 
-async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget) -> tuple[FinalItinerary, TokenUsage]:
+async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
+              on_token: OnToken | None = None) -> tuple[FinalItinerary, TokenUsage]:
     req = ctx.user_request
     draft, analysis, conflict = ctx.itinerary_draft, ctx.budget_analysis, ctx.conflict_resolution
     assert draft is not None and analysis is not None
     user = compact({
-        "request": req.model_dump(exclude={"lang"}),
-        "season_notes": ctx.destination_research.season_notes if ctx.destination_research else "",
-        "days": [{"day": d.day, "area": d.area, "activities": d.activities} for d in draft.days],
+        "destination": req.destination,
+        "days": req.days,
+        "interests": req.interests,
+        "highlights": [f"Day {d.day} {d.area}: {', '.join(d.activities[:2])}" for d in draft.days],
         "estimated_total_usd": analysis.estimated_total_usd,
-        "within_budget": analysis.within_budget,
+        "budget_usd": req.budget_usd,
         "over_budget_by_usd": analysis.over_budget_by_usd,
-        "budget_adjustment": {
-            "happened": conflict.triggered,
-            "iterations": conflict.iterations,
-            "actions": conflict.actions_taken,
-        },
+        "budget_changes": conflict.actions_taken,
     }) + "\n" + language_rule(req)
 
-    out, usage = await llm.complete(
-        agent="synthesis",
-        system=SYSTEM,
-        user=user,
-        output_model=SynthesisOutput,
-        max_tokens=500,
-        budget=budget,
-        mock=lambda: SynthesisOutput(summary=fallback_summary(ctx)),
+    text, usage = await llm.complete_text(
+        agent="synthesis", system=SYSTEM, user=user, max_tokens=220, budget=budget,
+        mock=lambda: fallback_summary(ctx), on_token=on_token,
     )
-    return build_final(ctx, out.summary.strip()), usage
+    return build_final(ctx, text), usage
 
 
 def build_final(ctx: SharedContext, summary: str) -> FinalItinerary:

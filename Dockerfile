@@ -1,5 +1,5 @@
-# Trip Planner — single-stage image. Serves HTTP (UI + SSE) on 0.0.0.0:8080, no TLS.
-# Public image: no secrets inside. ANTHROPIC_API_KEY is injected at runtime.
+# Trip Planner app — single-stage image. Serves HTTP (UI + SSE) on 0.0.0.0:8080, no TLS.
+# The LLM runs in a separate Ollama container (see ollama/Dockerfile), reached via OLLAMA_HOST.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
