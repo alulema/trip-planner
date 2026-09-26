@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trip Planner · Chain of Agents</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+  <!-- Fallback tokens: used only if the shared theme below fails to load. -->
+  <style>
+    :root {
+      --color-bg: #0a0f1e; --color-bg-secondary: #111827; --color-bg-card: #0f172a;
+      --color-border: rgba(255,255,255,.08); --color-text: #e2e8f0; --color-text-muted: #94a3b8;
+      --color-accent: #38bdf8; --color-accent-2: #818cf8;
+      --font-sans: system-ui, -apple-system, sans-serif; --font-mono: ui-monospace, monospace;
+      --radius: 12px; --transition-fast: 150ms ease;
+    }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); line-height: 1.6; }
+  </style>
+  <link rel="stylesheet" href="https://alexisalulema.com/demo-theme.css">
+  <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🧭</span>
+      <div>
+        <h1>Trip Planner</h1>
+        <p class="subtitle" data-i18n="subtitle">Una cadena de agentes planifica tu viaje en vivo</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="mode-badge" class="badge" hidden></span>
+      <button id="lang-toggle" class="ghost" type="button" aria-label="Language">EN</button>
+      <button id="about-btn" class="ghost" type="button" data-i18n="about">Acerca de</button>
+    </div>
+  </header>
+
+  <main>
+    <form id="trip-form" class="card form" autocomplete="off">
+      <label class="field wide">
+        <span data-i18n="destination">Destino</span>
+        <input name="destination" required minlength="2" maxlength="60" value="Kioto" placeholder="Kioto">
+      </label>
+      <label class="field">
+        <span data-i18n="days">Días</span>
+        <input name="days" type="number" min="1" max="7" value="5" required>
+      </label>
+      <label class="field">
+        <span data-i18n="budget">Presupuesto (USD)</span>
+        <input name="budget_usd" type="number" min="1" max="100000" step="1" value="1200" required>
+      </label>
+      <label class="field">
+        <span data-i18n="travelers">Viajeros</span>
+        <input name="travelers" type="number" min="1" max="8" value="1" required>
+      </label>
+      <label class="field wide">
+        <span data-i18n="interests">Intereses (separados por coma)</span>
+        <input name="interests" maxlength="160" value="comida, templos" data-i18n-placeholder="interestsPh">
+      </label>
+      <div class="form-actions">
+        <button id="submit-btn" class="primary" type="submit" data-i18n="plan">Planificar viaje</button>
+        <button id="lowball-btn" class="ghost" type="button" data-i18n="lowball"
+                title="">Probar presupuesto irreal ($50)</button>
+      </div>
+      <p class="disclaimer" data-i18n="disclaimer">Estimaciones generadas por IA, no tarifas en tiempo real.</p>
+    </form>
+
+    <ol id="chain" class="chain" aria-label="Agent chain">
+      <li data-agent="orchestrator"><span class="dot"></span><span data-i18n="a_orchestrator">Orquestador</span></li>
+      <li data-agent="destination_research"><span class="dot"></span><span data-i18n="a_destination_research">Investigación</span></li>
+      <li data-agent="itinerary_planning"><span class="dot"></span><span data-i18n="a_itinerary_planning">Itinerario</span></li>
+      <li data-agent="budget"><span class="dot"></span><span data-i18n="a_budget">Presupuesto</span></li>
+      <li data-agent="conflict_resolution"><span class="dot"></span><span data-i18n="a_conflict_resolution">Conflictos</span></li>
+      <li data-agent="synthesis"><span class="dot"></span><span data-i18n="a_synthesis">Síntesis</span></li>
+    </ol>
+
+    <div class="panels">
+      <section class="card trace-panel" aria-live="polite">
+        <div class="panel-head">
+          <h2 data-i18n="trace">Agent trace</h2>
+          <span id="token-meter" class="meter"></span>
+        </div>
+        <ol id="trace" class="trace"><li class="placeholder" data-i18n="traceEmpty">Envía un viaje para ver a los agentes trabajar.</li></ol>
+      </section>
+
+      <section class="card result-panel">
+        <div class="panel-head">
+          <h2 data-i18n="itinerary">Itinerario</h2>
+          <span id="status-pill" class="pill" hidden></span>
+        </div>
+        <div id="research" class="research" hidden></div>
+        <div id="budget-box" class="budget-box" hidden></div>
+        <div id="conflict-box" class="conflict-box" hidden></div>
+        <p id="summary" class="summary" hidden></p>
+        <ol id="days" class="days"></ol>
+        <p id="result-empty" class="placeholder" data-i18n="resultEmpty">El itinerario aparecerá aquí día por día.</p>
+      </section>
+    </div>
+  </main>
+
+  <script src="static/demo-info.js"></script>
+  <script src="https://alexisalulema.com/demo-panel.js" defer></script>
+  <script src="static/app.js" defer></script>
+</body>
+</html>
