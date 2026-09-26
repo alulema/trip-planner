@@ -1,13 +1,13 @@
 name: Test & publish images
 
-# Runs the offline test suite on every push/PR; on main, builds and publishes the public
+# Runs the offline test suite and an end-to-end smoke test with the REAL model (Qwen 2.5 via
+# Ollama, resources capped like the production pod) on every push/PR; on main, publishes the public
 # images ghcr.io/<owner>/trip-planner (app) and ghcr.io/<owner>/trip-planner-ollama (Ollama +
 # Qwen 2.5 baked), :latest + a sha tag. Set both GHCR packages to Public once so they can be
 # pulled without credentials.
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -27,8 +27,33 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
 
-  image:
+  e2e:
     needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install httpx==0.28.1
+
+      - name: Build and start app + Ollama (real Qwen 2.5, pod-sized limits)
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait
+
+      - name: Plan real trips over SSE
+        run: python scripts/smoke_e2e.py --base-url http://localhost:8080
+
+      - name: Container logs
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color --tail=300
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
+
+  image:
+    needs: [test, e2e]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
