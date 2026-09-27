@@ -145,7 +145,7 @@ The script plans four real trips (three catalog cities and one outside the catal
 | `MAX_TOKENS_PER_SESSION` | `6000` | Tokens one trip may consume (prompt + generated, all LLM calls). |
 | `CHAIN_TIMEOUT_SECONDS` | `180` | Hard wall-clock limit for one chain. |
 | `MAX_CONCURRENT_SESSIONS` | `1` | Chains running at once. CPU inference is serialized anyway. |
-| `MAX_REQUESTS_PER_IP_PER_HOUR` | `10` | Per-client rate limit (in memory, using `X-Forwarded-For` when present). |
+| `MAX_REQUESTS_PER_IP_PER_HOUR` | `10` | Per-client rate limit (in memory, using `CF-Connecting-IP`, else the first `X-Forwarded-For` value). |
 | `MAX_SESSIONS_PER_HOUR` | `30` | Limit on trips per hour across all clients. |
 | `MAX_CONFLICT_ITERATIONS` | `2` | Conflict-loop cap. Values above 2 are clamped to 2. |
 | `MOCK_LATENCY_MS` | `600` | Simulated latency per agent in mock mode. |

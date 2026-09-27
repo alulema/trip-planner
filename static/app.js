@@ -7,7 +7,7 @@
     es: {
       subtitle: "Una cadena de agentes planifica tu viaje en vivo",
       about: "Acerca de", destination: "Destino", days: "Días", budget: "Presupuesto (USD)",
-      travelers: "Viajeros", interests: "Intereses (separados por coma)", interestsPh: "comida, templos",
+      travelers: "Viajeros", interests: "Intereses (separados por coma)", interestsPh: "comida, centro histórico",
       plan: "Planificar viaje", planning: "Planificando…", lowball: "Probar presupuesto irreal ($50)",
       disclaimer: "Estimaciones generadas por IA, no tarifas en tiempo real.",
       trace: "Agent trace", itinerary: "Itinerario",
@@ -30,7 +30,7 @@
     en: {
       subtitle: "A chain of agents plans your trip, live",
       about: "About", destination: "Destination", days: "Days", budget: "Budget (USD)",
-      travelers: "Travelers", interests: "Interests (comma separated)", interestsPh: "food, temples",
+      travelers: "Travelers", interests: "Interests (comma separated)", interestsPh: "food, historic center",
       plan: "Plan trip", planning: "Planning…", lowball: "Try an unrealistic budget ($50)",
       disclaimer: "AI-generated estimates, not live prices.",
       trace: "Agent trace", itinerary: "Itinerary",

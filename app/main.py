@@ -90,6 +90,11 @@ async def graph() -> str:
 
 
 def _client_ip(request: Request) -> str:
+    # CF-Connecting-IP is set by Cloudflare and can't be forged by the client; the first
+    # X-Forwarded-For value can, so it is only a fallback for other reverse proxies.
+    connecting = request.headers.get("cf-connecting-ip", "").strip()
+    if connecting:
+        return connecting
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         return forwarded.split(",")[0].strip()
