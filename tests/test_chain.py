@@ -286,3 +286,32 @@ def test_narrative_filter_is_off_without_known_places():
     from app.agents.synthesis import clean_narrative
 
     assert clean_narrative("Visita el Museo del Ámbito.") == "Visita el Museo del Ámbito."
+
+
+def test_graph_topology():
+    from app.orchestrator import GRAPH
+
+    g = GRAPH.get_graph()
+    assert set(g.nodes) == {"__start__", "intake", "destination_research", "itinerary_planning", "budget",
+                            "conflict_resolution", "revise_itinerary", "synthesis", "finish", "__end__"}
+    edges = {(e.source, e.target, e.conditional) for e in g.edges}
+    assert ("budget", "conflict_resolution", True) in edges and ("budget", "synthesis", True) in edges
+    assert ("conflict_resolution", "revise_itinerary", True) in edges
+    assert ("conflict_resolution", "synthesis", True) in edges
+    assert ("revise_itinerary", "budget", False) in edges
+
+
+def test_exhausted_catalog_routes_straight_to_synthesis():
+    ctx = make_ctx(budget_usd=50)
+    ctx.conflict_resolution.applied_action_ids = [a.id for a in ACTION_CATALOG]  # nothing left to try
+    events = asyncio.run(run_chain(ctx))
+    assert [d["agent"] for d in traces(events, "skipped")] == ["conflict_resolution"]
+    assert ctx.conflict_resolution.iterations == 1 and ctx.conflict_resolution.last_action_ids == []
+    assert ctx.itinerary_draft.revision == 0  # no revision node ran
+    assert ctx.final_itinerary.within_budget is False
+
+
+def test_trace_in_final_state_matches_streamed_trace():
+    ctx = make_ctx(budget_usd=50)
+    events = asyncio.run(run_chain(ctx))
+    assert [t.model_dump(exclude_none=True) for t in ctx.trace] == traces(events)

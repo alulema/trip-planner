@@ -1,8 +1,8 @@
 """Data contract shared by every agent in the chain (the `shared_context`).
 
-One `SharedContext` object travels through the whole chain. Each agent receives the full
-context and returns ONLY its own section; the orchestrator is the only component that
-merges sections back in. Sections are append-only: once written, a key is only replaced
+One `SharedContext` object travels through the whole chain — it is also the LangGraph
+state. Each agent receives the full context and returns ONLY its own section; the graph
+merges sections back in (plain replacement per key, or the reducers declared below). Sections are append-only: once written, a key is only replaced
 by a newer revision of the same section (e.g. `itinerary_draft.revision` 0 → 1), never
 deleted.
 
@@ -16,8 +16,9 @@ Two kinds of models live here:
 
 from __future__ import annotations
 
+import operator
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -168,6 +169,9 @@ class ConflictResolution(BaseModel):
     applied_action_ids: list[str] = Field(default_factory=list)
     decisions: list[DecisionRecord] = Field(default_factory=list)
     resolved: bool | None = None
+    # Actions chosen in the latest iteration, applied next by the itinerary revision step
+    # (empty after an iteration that found nothing left in the catalog).
+    last_action_ids: list[str] = Field(default_factory=list)
 
 
 class FinalItinerary(BaseModel):
@@ -198,6 +202,16 @@ class TokenUsage(BaseModel):
         return self.input_tokens + self.output_tokens
 
 
+def add_usage(current: dict[str, TokenUsage], new: dict[str, TokenUsage]) -> dict[str, TokenUsage]:
+    """Reducer: sum token usage per agent across steps."""
+    merged = {k: v.model_copy() for k, v in current.items()}
+    for agent, usage in new.items():
+        total = merged.setdefault(agent, TokenUsage())
+        total.input_tokens += usage.input_tokens
+        total.output_tokens += usage.output_tokens
+    return merged
+
+
 class SharedContext(BaseModel):
     session_id: str
     user_request: UserRequest
@@ -207,9 +221,11 @@ class SharedContext(BaseModel):
     budget_analysis: BudgetAnalysis | None = None
     conflict_resolution: ConflictResolution = Field(default_factory=ConflictResolution)
     final_itinerary: FinalItinerary | None = None
-    trace: list[TraceEntry] = Field(default_factory=list)
+    # Reducers (LangGraph): steps return only their new trace entries / token usage and the
+    # graph accumulates them, so the trace stays append-only.
+    trace: Annotated[list[TraceEntry], operator.add] = Field(default_factory=list)
     # Tokens used per agent (summed across calls) — observability for cost control.
-    token_usage: dict[str, TokenUsage] = Field(default_factory=dict)
+    token_usage: Annotated[dict[str, TokenUsage], add_usage] = Field(default_factory=dict)
 
     @property
     def total_tokens(self) -> int:
