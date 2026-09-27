@@ -1,10 +1,11 @@
 # Devlog: Trip Planner (Chain-of-Agents)
 
-Bitácora interna del demo. Tiene tres partes:
+Bitácora interna del demo. Tiene cuatro partes:
 
-1. **Estado final**: qué es y cómo está implementado hoy (`main` @ `223bd7e` + fase 1 de datos en vivo).
+1. **Estado final**: qué es y cómo está implementado hoy (`main` @ `6b43289`, con la fase 1 de datos en vivo).
 2. **Desafíos superados**: cada problema real que apareció, por qué ocurrió, cómo se resolvió, dónde vive la solución y con qué evidencia se validó.
-3. **Cronología**: sesiones, commits y PRs, para reconstruir el camino.
+3. **Relación con el libro**: qué implementa el capítulo 7 de Imran Ahmad, en qué coincidimos, qué aporta este demo y dónde el libro va por delante.
+4. **Cronología**: sesiones, commits y PRs, para reconstruir el camino.
 
 El manual público de réplica es el `README.md`. Este archivo es la memoria del proyecto y la materia prima del post del blog.
 
@@ -352,7 +353,48 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 
 ---
 
-## 3. Cronología
+## 3. Relación con el libro
+
+Referencia: *30 Agents Every AI Engineer Must Build* (Imran Ahmad, Packt, 2026), capítulo 7, y su repositorio oficial ([PacktPublishing/30-Agents-Every-AI-Engineer-Must-Build](https://github.com/PacktPublishing/30-Agents-Every-AI-Engineer-Must-Build), `chapter07/ch07_tool_orchestration.ipynb`). El repositorio se revisó después de construir el demo; no se reutilizó código.
+
+### Qué implementa el capítulo
+
+- **Orquestador (§7.4–7.5):** `ManagerAgent` recorre en un bucle fijo tres especialistas (`NewsAgent`, `FinancialAgent`, `SentimentAgent`) que devuelven `{source, status, data}` con datos simulados. Ningún especialista llama al LLM; el control es determinístico.
+- **Memoria (§7.5, Figura 7.3):** la figura describe memoria de trabajo, episódica y semántica. El código implementa la episódica: una lista con timestamp, agente, estado y un resumen truncado.
+- **Conflictos (§7.6, Figura 7.4):** el texto describe detección, arbitraje, consenso por confianza y escalamiento a un humano. El código implementa la detección: `conflict_score = |sentimiento − cambio_bursátil/10|` contra un umbral de 0,5, y un aviso en el reporte.
+- **Workflows (§7.7):** máquinas de estado con condiciones de guarda, pausas para aprobación humana (HITL) y auditoría.
+- **Atribución:** en el libro, la memoria compartida y la resolución de conflictos son partes del patrón Chain-of-Agents (§7.5 y §7.6), no patrones aparte; el *Memory-Augmented Agent* propiamente dicho está en el capítulo 5.
+
+### Conclusión: ¿aporta valor o es una copia inferior?
+
+No es una copia inferior; es un trabajo de otra naturaleza, construido sobre la misma idea, que en varios puntos va más lejos que el código del capítulo.
+
+**Precisiones para ser justos**
+
+- **No es copia, pero sí es derivado.** El concepto (orquestador central, especialistas, memoria compartida, detección de conflictos) viene del libro y el demo lo cita. El dominio, el diseño y el código son propios.
+- **No compiten en lo mismo.** El notebook del capítulo es material didáctico que cubre tres patrones en pocas celdas; su valor es explicarlos con claridad. El demo lleva **uno** de esos patrones a un producto que funciona. Que sea más completo que un ejemplo de notebook es lo esperable; lo relevante es lo que se aprendió al hacerlo.
+
+**Dónde el demo aporta algo que el libro no**
+
+1. **Resuelve el conflicto, no solo lo detecta.** El capítulo calcula un `conflict_score` e imprime "Further investigation recommended"; el arbitraje queda en el texto. Aquí se cierra el ciclo: detectar, decidir con probabilidades visibles, aplicar, re-verificar, con tope de iteraciones y respuesta honesta si no alcanza. Es la parte del patrón que el libro deja en teoría.
+2. **Muestra el patrón con datos y modelo reales.** Los especialistas del capítulo devuelven datos fijos. Aquí se enfrentan un modelo de 1.5B que inventa barrios, APIs que se atascan y servidores que devuelven 504, y la sección 2 documenta cómo se resolvió cada caso. Es conocimiento de campo que el libro no cubre.
+3. **Lo honesto lo escribe el código.** El modelo no puede contradecir el presupuesto, el clima ni el tipo de cambio: una respuesta concreta y medida a "cómo evito que el agente alucine las cifras", que no está en el capítulo.
+4. **La orquestación se ve.** Trace en vivo en el navegador, con cada decisión y su probabilidad, frente a logs de colores en un notebook.
+5. **Está evaluado.** E2E en CI con el modelo y las APIs reales, midiendo calidad (atracciones en su día, chequeos de honestidad), no solo que la celda corra.
+
+**Dónde el libro va por delante**
+
+- **Humano en el ciclo:** el libro lo tiene en sus workflows (§7.7); el demo no. Para una demo pública es una elección razonable, pero es una carencia real frente al patrón.
+- **Amplitud:** tres patrones y cinco proveedores de LLM; el demo profundiza en uno.
+- **Prosa:** el libro asume modelos grandes; el demo escribe más tosco y por eso necesita tanto filtro.
+
+**Cómo presentarlo en el post**
+
+Un lector del libro encuentra aquí algo que el libro no le da: el eslabón débil del patrón (la resolución de conflictos) implementado de punta a punta, en condiciones reales, con evidencia de qué funcionó y qué no. El encuadre honesto no es "mi versión de la demo de Ahmad", sino **"tomé el patrón del capítulo 7 y lo llevé a producción con un modelo local pequeño; esto es lo que tuve que resolver"**. Así el aporte queda donde corresponde y se sostiene.
+
+---
+
+## 4. Cronología
 
 | Fecha | Sesión | Qué se hizo | Commit / PR |
 |---|---|---|---|
@@ -367,11 +409,12 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 | 2026-09-27 | 3e | Atracciones gratuitas, filtro de narrativa (D10, D12) | `4321762`, `9bbd063` |
 | 2026-09-27 | — | **MVP fusionado a `main`** e imágenes publicadas en GHCR | PR #1 → `4c6f232` |
 | 2026-09-27 | 4 | Orquestación con LangGraph (D15) | PR #2 → `223bd7e` |
-| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, lugares (Wikidata/OSM), tipo de cambio, fecha de viaje (D17) | `213f143`, `431b239`, `fe5498c`, `bc06e24`, Wikidata |
+| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, lugares (Wikidata/OSM), tipo de cambio, fecha de viaje (D17) | PR #6 → `6b43289` |
+| 2026-09-27 | 5 | Comparación con el código del capítulo 7 del libro (sección 3) | — |
 
 ---
 
-## 4. Pendientes
+## 5. Pendientes
 
 - [ ] Registrar el demo en la infra de `personal-website` (`infra.bicep` con sidecar Ollama, alta del `projectId`, `shareable: false`) con los datos de `docs/HANDOFF.md`.
 - [ ] Revisar a mano las atracciones y barrios de `cities.json`, sobre todo en ciudades conocidas.
