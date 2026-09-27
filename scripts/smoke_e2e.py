@@ -66,6 +66,9 @@ def highlight_placement(ctx: dict) -> tuple[int, int, list[str]]:
     for d in days:
         words = _stems(" ".join(d["activities"]))
         own = _stems(d["area"]) | city
+        # Words of this day's own highlights ("Santa" Luzia) can't prove another area's
+        # highlight ("Elevador de Santa Justa") is here.
+        own_highlights = set().union(set(), *(_stems(h) for h in by_area.get(d["area"], [])))
         if d["area"] in by_area and d["area"] not in seen_areas:
             seen_areas.add(d["area"])
             for h in by_area[d["area"]]:
@@ -77,7 +80,7 @@ def highlight_placement(ctx: dict) -> tuple[int, int, list[str]]:
             if area == d["area"]:
                 continue
             misplaced += [f"day {d['day']} ({d['area']}): {h}" for h in hs
-                          if (_stems(h) - _stems(area) - own) & words]
+                          if (_stems(h) - _stems(area) - own - own_highlights) & words]
     return used, planned, misplaced
 
 
