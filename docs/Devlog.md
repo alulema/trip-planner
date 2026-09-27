@@ -126,7 +126,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
   - `trip-planner-ollama` (Ollama 0.12.3 con `qwen2.5:1.5b-instruct` incluido, `:11434`, sin descarga al arrancar).
 - **Pod sugerido** (tope 2 vCPU / 4 GiB): Ollama 1.75 vCPU / 3 GiB y app 0.25 vCPU / 1 GiB. `shareable: false`. Datos completos en `docs/HANDOFF.md`.
 - **Workflow `image.yml`:**
-  - `test`: 93 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
+  - `test`: 95 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
   - `e2e`: Qwen real con los límites del pod, APIs de datos en vivo reales y 4 viajes por SSE (fechas dentro y fuera de la ventana de pronóstico);
   - `image`: publica solo en `main` y solo si pasan `test` y `e2e`.
 - **Workflow `model-benchmark.yml`** (manual): los mismos viajes con 1.5B y 3B en paralelo.
@@ -351,6 +351,17 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - **Dónde (lugares):** `app/live/wikidata.py` (`WikidataPlaces`, `PlacesChain`), `app/live/osm.py` (`OverpassPlaces`, `pair`).
 - **Evidencia:** 30 tests nuevos (28 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
 
+### D18. Una fecha elegida que el servidor no recibía
+
+- **Síntoma (reportado en el demo desplegado):** con la fecha de inicio en el 4 de diciembre, la respuesta seguía hablando de septiembre.
+- **Causa:** la lógica estaba bien (reproducido: con el código actual llega `start_date=2026-12-04` y la nota dice "4 dic – 6 dic"). El problema era de caché: el `index.html` nuevo (con el campo de fecha) convivía con un `app.js` viejo servido por el navegador o por Cloudflare, que cachea `.js` por defecto. Ese script no enviaba `start_date`, y sin fecha el servidor usa el mes actual.
+- **Solución:**
+  - el servidor sirve `index.html` con cada recurso local versionado por hash de contenido (`static/app.js?v=…`), así cada release cambia la URL;
+  - `index.html` va con `Cache-Control: no-cache`; los recursos versionados, con caché larga (`immutable`), y los no versionados, con `no-cache`;
+  - el primer evento del trace (`plan_created`) muestra las fechas del viaje, o "no travel dates", para que este caso se vea a simple vista.
+- **Dónde:** `app/main.py` (`_versioned_index`, `static_cache_headers`), `app/orchestrator.py` (`intake`).
+- **Evidencia:** 2 tests nuevos en `tests/test_api.py` (versionado y cabeceras; fechas en el trace).
+
 ---
 
 ## 3. Relación con el libro
@@ -410,7 +421,8 @@ Un lector del libro encuentra aquí algo que el libro no le da: el eslabón déb
 | 2026-09-27 | — | **MVP fusionado a `main`** e imágenes publicadas en GHCR | PR #1 → `4c6f232` |
 | 2026-09-27 | 4 | Orquestación con LangGraph (D15) | PR #2 → `223bd7e` |
 | 2026-09-27 | 5 | Datos en vivo, fase 1: clima, lugares (Wikidata/OSM), tipo de cambio, fecha de viaje (D17) | PR #6 → `6b43289` |
-| 2026-09-27 | 5 | Comparación con el código del capítulo 7 del libro (sección 3) | — |
+| 2026-09-27 | 5 | Comparación con el código del capítulo 7 del libro (sección 3) | PR #7 → `cf8e10e` |
+| 2026-09-27 | 5 | Fecha ignorada por caché del JS: recursos versionados (D18) | — |
 
 ---
 

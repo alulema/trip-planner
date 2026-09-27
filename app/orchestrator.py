@@ -113,7 +113,11 @@ class Reporter:
 
 async def intake(state: SharedContext, runtime: Runtime[Deps]) -> dict:
     deps, rep = runtime.context, Reporter()
+    req = state.user_request
+    dates = (f"{req.start_date.isoformat()} → {req.end_date.isoformat()}" if req.start_date
+             else "no travel dates (season from the current month)")
     rep.trace_event("orchestrator", "plan_created", message=(
+        f"{dates} · "
         f"intake → live data → research → itinerary → budget → [conflict loop ≤{deps.max_conflict_iterations}]"
         f" → synthesis · llm={deps.llm.model} · decisions={deps.engine.name}"
         f" · live={deps.live.name if deps.live else 'off'} · {deps.token_limit} tokens · langgraph"))

@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -56,6 +57,29 @@ def test_stream_with_travel_dates_carries_live_data(client):
     final = events[-1][1]["final_itinerary"]
     assert final["fx"]["currency"] == "JPY" and final["days"][0]["weather"]["date"] == start
     assert client.get("/api/config").json()["live_data"] == "mock"
+
+
+def test_index_versions_assets_and_is_not_cached(client):
+    r = client.get("/")
+    assert r.headers["cache-control"] == "no-cache"
+    assert re.search(r'src="static/app\.js\?v=[0-9a-f]{10}"', r.text)
+    assert re.search(r'href="static/styles\.css\?v=[0-9a-f]{10}"', r.text)
+    assert "static/app.js\"" not in r.text  # no unversioned local asset left
+    versioned = re.search(r'static/app\.js\?v=[0-9a-f]+', r.text).group(0)
+    assert "immutable" in client.get("/" + versioned).headers["cache-control"]
+    assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
+
+
+def test_trace_states_the_travel_dates(client):
+    from datetime import date, timedelta
+
+    start = date.today() + timedelta(days=60)
+    events = parse_sse(client.get("/api/plan-trip/stream", params={**PARAMS, "start_date": start.isoformat()}).text)
+    plan = next(d for e, d in events if e == "trace" and d["event"] == "plan_created")
+    assert plan["message"].startswith(f"{start.isoformat()} → {(start + timedelta(days=2)).isoformat()}")
+    events = parse_sse(client.get("/api/plan-trip/stream", params=PARAMS).text)
+    plan = next(d for e, d in events if e == "trace" and d["event"] == "plan_created")
+    assert plan["message"].startswith("no travel dates")
 
 
 def test_invalid_start_date_is_an_sse_error(client):

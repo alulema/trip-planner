@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
+import re
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -17,7 +19,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -59,9 +61,39 @@ app.state.engine = build_decision_engine(settings.decision_engine)
 app.state.live = build_live(settings.live_data, overpass_urls=settings.overpass_urls or None)
 
 
+def _versioned_index() -> str:
+    """index.html with every local asset URL tagged by its content hash (`static/app.js?v=…`).
+
+    Without it a browser or CDN (Cloudflare caches .js by default) can pair a new index.html
+    with a stale app.js: seen after the travel-date release, where the old script didn't send
+    `start_date` and the server fell back to the current month."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    def tag(m: re.Match) -> str:
+        digest = hashlib.sha256((STATIC_DIR / m.group(2)).read_bytes()).hexdigest()[:10]
+        return f'{m.group(1)}static/{m.group(2)}?v={digest}"'
+
+    return re.sub(r'((?:src|href)=")static/([\w.-]+)"', tag, html)
+
+
+INDEX_HTML = _versioned_index()
+
+
 @app.get("/", include_in_schema=False)
-async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+async def index() -> HTMLResponse:
+    # Always revalidate the page itself; the versioned assets it points to can be cached.
+    return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-cache"})
+
+
+@app.middleware("http")
+async def static_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        # Versioned URLs change with the content, so they can be cached for good; an
+        # unversioned request (old page) must revalidate.
+        response.headers["Cache-Control"] = ("public, max-age=31536000, immutable"
+                                             if request.query_params.get("v") else "no-cache")
+    return response
 
 
 @app.get("/api/health")
