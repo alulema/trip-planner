@@ -6,13 +6,14 @@ only writes the season notes. Otherwise the model estimates everything (source="
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from datetime import datetime, timezone
 
 from .. import catalog
-from ..guardrails import TokenBudget
-from ..llm_client import LLMClient, OnProgress
+from ..guardrails import TokenBudget, TokenBudgetExceeded
+from ..llm_client import LLMClient, LLMError, OnProgress
 from ..models import (
     DestinationResearch,
     DestinationResearchOutput,
@@ -35,13 +36,19 @@ Estimate the costs for THIS destination's cost of living. For reference, lodging
 about 25 (very cheap countries) to 300 (the most expensive cities), a meal from 3 to 45, and
 local transport from 2 to 25."""
 
+log = logging.getLogger("trip_planner.research")
+
 SEASON_SYSTEM = """You are a travel research agent. Reply with JSON only.
 Give season_notes: weather and season advice for visiting the destination in the given month,
-one short sentence."""
+in one short sentence of at most 25 words."""
 
 AGENT_NOTES = {
     "es": "Estimaciones generales de un modelo de IA local, no tarifas en tiempo real.",
     "en": "General estimates from a local AI model, not live prices.",
+}
+GENERIC_SEASON = {
+    "es": "Revisa el clima de tu fecha de viaje antes de salir.",
+    "en": "Check the weather for your travel dates before you go.",
 }
 CATALOG_NOTES = {
     "es": "Zonas y costos de referencia del catálogo curado (aproximados, no tarifas en tiempo real).",
@@ -102,14 +109,20 @@ async def _from_catalog(ctx: SharedContext, city: catalog.City, llm: LLMClient, 
         "destination": f"{city.name}, {city.country}",
         "travel_month": datetime.now(timezone.utc).strftime("%B"),
     }) + "\n" + language_rule(req)
-    out, usage = await llm.complete_json(
-        agent="destination_research", system=SEASON_SYSTEM, user=user, output_model=SeasonNotesOutput,
-        max_tokens=90, budget=budget, on_progress=on_progress,
-        mock=lambda: SeasonNotesOutput(season_notes=_mock(ctx).season_notes),
-    )
+    try:
+        out, usage = await llm.complete_json(
+            agent="destination_research", system=SEASON_SYSTEM, user=user, output_model=SeasonNotesOutput,
+            max_tokens=200, budget=budget, on_progress=on_progress,
+            mock=lambda: SeasonNotesOutput(season_notes=_mock(ctx).season_notes),
+        )
+        season = out.season_notes.strip()
+    except (LLMError, TokenBudgetExceeded) as exc:
+        # The catalog facts don't depend on the model: a failed season note must not sink the trip.
+        log.warning("season notes unavailable for %s: %s", city.name, exc)
+        season, usage = GENERIC_SEASON[req.lang], TokenUsage()
     rooms = math.ceil(req.travelers / 2)
     section = DestinationResearch(
-        season_notes=out.season_notes.strip(),
+        season_notes=season,
         recommended_areas=list(city.areas),
         reference_costs=ReferenceCosts(
             lodging_per_night_usd=city.lodging_room_night_usd * rooms,

@@ -224,3 +224,11 @@ inventado, Hanói más caro que Lisboa; y un resumen cortado a media frase (`don
 3. **E2E:** 4.º escenario fuera del catálogo (Valparaíso); reporte con la fuente de datos.
 4. **Benchmark aparte** (`.github/workflows/model-benchmark.yml`): mismos viajes con
    `qwen2.5:1.5b-instruct` vs `qwen2.5:3b-instruct`, límites de pod, en paralelo.
+
+### Bug encontrado por el benchmark (run 36282549941, job 1.5b)
+
+La llamada "solo temporada" del camino catálogo tenía `max_tokens=90`; Qwen 1.5B se extendió en
+Kioto, cortó el JSON dos veces (`done=length`) y la cadena falló (`chain_failed`). El e2e del CI
+pasó en el mismo commit por azar (el modelo no es determinista). Arreglo: 200 tokens + "máx. 25
+palabras" en el prompt, y **si la nota de temporada falla, se usa un texto genérico**: los hechos
+del catálogo no dependen del modelo. Tests de regresión añadidos.

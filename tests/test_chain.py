@@ -195,3 +195,25 @@ def test_truncated_last_sentence_is_dropped():
 
     assert clean_narrative("Visit Gion. Then the market. Also do not forget to") == "Visit Gion. Then the market."
     assert clean_narrative("A single unfinished sentence") == "A single unfinished sentence"
+
+
+class BrokenJsonLLM(MockLLM):
+    async def complete_json(self, *, agent, **kw):
+        if agent == "destination_research":
+            raise LLMError("destination_research: model returned invalid JSON twice")
+        return await super().complete_json(agent=agent, **kw)
+
+
+def test_catalog_city_survives_a_failed_season_note():
+    # Reproduces benchmark run 36282549941: the season-only call ran out of tokens twice.
+    ctx = make_ctx(budget_usd=5000, destination="Kioto")
+    asyncio.run(run_chain(ctx, llm=BrokenJsonLLM(0)))
+    r = ctx.destination_research
+    assert r.source == "catalog" and r.recommended_areas == ["Higashiyama", "Gion", "Arashiyama"]
+    assert r.season_notes == "Revisa el clima de tu fecha de viaje antes de salir."
+    assert ctx.final_itinerary is not None
+
+
+def test_unknown_city_still_fails_cleanly_when_research_breaks():
+    with pytest.raises(ChainError):
+        asyncio.run(run_chain(make_ctx(destination="Valparaíso"), llm=BrokenJsonLLM(0)))
