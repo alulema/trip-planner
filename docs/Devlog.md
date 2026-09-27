@@ -139,14 +139,16 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 | Hanói, $400 | catálogo | 28–35 s | ~1020–1060 | 2/3 (métrica); costos creíbles ($45/noche) |
 | Valparaíso, $600 | modelo | 32–36 s | ~1165–1180 | el modelo inventa barrios (limitación esperada) |
 
-Con datos en vivo (segundo e2e con APIs reales, `431b239`):
+Con datos en vivo (e2e con APIs reales; Valparaíso con Wikidata, `c8959d7`):
 
 | Escenario | Datos en vivo | Paso en vivo | Investigación | Total | Tokens |
 |---|---|---|---|---|---|
-| Kioto, en 5 días | pronóstico real 10–24 °C; 1 USD = 157,59 JPY (BCE) | 0,7 s | 0 tokens | 41,7 s | 1024 |
-| Lisboa, en 45 días | referencia 2025: 14–20 °C, lluvia 3 de 3 días; 1 USD = 0,877 EUR (BCE) | 4,3 s | 0 tokens | 42,1 s | 966 |
-| Hanói, en 10 días | pronóstico 25–30 °C, lluvia 1 de 2 días; 1 USD = 25 952 VND (ExchangeRate-API) | 7,2 s | 0 tokens | 42,3 s | 901 |
-| Valparaíso, en 7 días | pronóstico 11–18 °C; 1 USD = 963 CLP; **OSM: 504 en overpass-api.de** → barrios del modelo | 15,4 s | 333 tokens | 55,6 s | 1090 |
+| Kioto, en 5 días | pronóstico real 10–24 °C; 1 USD = 157,59 JPY (BCE) | 1,3 s | 0 tokens | 41,7 s | 999 |
+| Lisboa, en 45 días | referencia 2025: 14–20 °C, lluvia 3 de 3 días; 1 USD = 0,877 EUR (BCE) | 4,8 s | 0 tokens | 39,1 s | 886 |
+| Hanói, en 10 días | pronóstico 25–30 °C, lluvia 1 de 2 días; 1 USD = 25 952 VND (ExchangeRate-API) | 8,2 s | 0 tokens | 42,1 s | 849 |
+| Valparaíso, en 7 días | pronóstico 11–17 °C; 1 USD = 963 CLP; **barrios y lugares reales de Wikidata** (Catedral de Valparaíso, Museo a Cielo Abierto, Parque Cultural…), 5/5 en su día | 1,3 s | 189 tokens (solo costos) | 46,3 s | 1173 |
+
+El paso en vivo de las ciudades de catálogo tarda 1–8 s por el atasco de la primera petición a Open-Meteo que absorbe el reintento (ver D17).
 
 Las tres ciudades del catálogo ya no generan nada en la investigación (antes ~90–140 tokens), y el total de tokens bajó en consecuencia.
 
@@ -154,7 +156,7 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 
 ### Limitaciones conocidas
 
-- Fuera del catálogo, los barrios vienen de OpenStreetMap; si OSM tiene pocos datos, el 1.5B inventa barrios y lugares. El emparejamiento lugar↔barrio es geométrico y puede fallar cerca de un límite.
+- Fuera del catálogo, los barrios vienen de Wikidata (u OSM); la cobertura de barrios varía por ciudad (Valparaíso: solo 2, uno con un nombre largo) y, si no hay al menos 2, el 1.5B vuelve a inventar barrios y lugares. El emparejamiento lugar↔barrio es geométrico y puede fallar cerca de un límite.
 - Más allá de ~16 días no hay pronóstico real: se muestra una referencia histórica.
 - Las APIs públicas a veces se atascan en una petición (visto en CI); hay reintento, pero un proveedor puede faltar y la cadena lo reemplaza por catálogo/modelo.
 - El filtro de la narrativa es heurístico: un detalle falso junto a un nombre conocido ("estación Kyoto Central") puede pasar.
@@ -343,6 +345,7 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - **Segundo e2e real:** los logs mostraron un patrón claro: la *primera* petición a Open-Meteo de cada viaje se atasca 3 s (timeout de conexión) y el reintento responde al instante. Con el reintento, las cuatro ciudades obtuvieron clima y tipo de cambio reales. Lo único que faltó fue OSM: la instancia pública de Overpass respondió `504 Gateway Timeout` (sobrecarga habitual). Se añadió una segunda instancia pública (`overpass.private.coffee`) como respaldo; `OVERPASS_URL` acepta una lista.
 - **Tercer e2e real:** clima y tipo de cambio otra vez reales en los cuatro viajes, pero **las dos** instancias de Overpass agotaron su timeout de 10 s. Si fallan dos servidores independientes, el problema era la consulta, no la carga: una búsqueda por radio (`around`) sobre nodos, vías *y relaciones*, con `out center` en relaciones (el servidor resuelve la geometría de cada miembro). Se reescribió con una caja delimitadora (usa el índice espacial) y solo nodos y vías; el log registra ahora cuántos elementos devuelve y en cuánto tiempo.
 - **Cuarto e2e real:** aun con la consulta liviana, `overpass-api.de` respondió 504 y la segunda instancia agotó el timeout. Con cuatro corridas se ve que las instancias públicas de Overpass no son fiables desde runners compartidos, y cada fallo sumaba ~28 s al viaje. Se pasó a **Wikidata** como fuente principal de lugares (SPARQL geográfico: barrios y lugares por clase, con coordenadas y número de enlaces a Wikipedia como medida de notoriedad), con Overpass (una instancia) de respaldo. El emparejamiento barrio↔lugar se extrajo a una función común (`pair`), igual para ambas fuentes.
+- **Quinto e2e real:** Wikidata respondió en **0,5 s** (77 filas: 2 barrios, 75 lugares). Valparaíso pasó de barrios inventados por el modelo ("Casa Blanca", "Playa de Coquimbo", "La Mocha") a lugares reales, con 5/5 atracciones en su día y el paso en vivo de 28 s a 1,3 s. Queda un detalle visible: Wikidata tiene pocos barrios de Valparaíso clasificados como tales (los cerros suelen figurar como colinas), y uno de los dos es la etiqueta larga del sitio UNESCO ("Barrio histórico de la ciudad portuaria de Valparaíso"). Es un nombre real, así que se deja tal cual.
 - **Dónde:** `app/live/`, `app/agents/live_data.py`, `app/agents/destination_research.py`, `app/agents/itinerary_planning.py` (`forecast_days`, marca de lluvia), `app/agents/synthesis.py` (`local_fx`), `static/app.js` (panel de fuentes).
 - **Dónde (lugares):** `app/live/wikidata.py` (`WikidataPlaces`, `PlacesChain`), `app/live/osm.py` (`OverpassPlaces`, `pair`).
 - **Evidencia:** 30 tests nuevos (28 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
