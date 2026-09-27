@@ -2,7 +2,7 @@
 
 Bitácora interna del demo. Tiene tres partes:
 
-1. **Estado final**: qué es y cómo está implementado hoy (`main` @ `223bd7e`).
+1. **Estado final**: qué es y cómo está implementado hoy (`main` @ `223bd7e` + fase 1 de datos en vivo).
 2. **Desafíos superados**: cada problema real que apareció, por qué ocurrió, cómo se resolvió, dónde vive la solución y con qué evidencia se validó.
 3. **Cronología**: sesiones, commits y PRs, para reconstruir el camino.
 
@@ -20,7 +20,7 @@ Una demo pública del patrón **Chain-of-Agents Orchestrator** (cap. 7 de *"30 A
 - qué decisiones toma, con su probabilidad;
 - cuándo aparece un conflicto de presupuesto y cómo se resuelve sin intervención humana.
 
-Todo corre **local y sin APIs externas**: un LLM pequeño (Qwen 2.5 1.5B vía Ollama) más un motor de decisiones no generativo. No hay secretos.
+El razonamiento corre **local**: un LLM pequeño (Qwen 2.5 1.5B vía Ollama) más un motor de decisiones no generativo. Los hechos que cambian (clima de las fechas del viaje, barrios y lugares fuera del catálogo, tipo de cambio) vienen de **fuentes públicas gratuitas y sin API key**, todas opcionales. No hay secretos.
 
 ### Principio de diseño: generar una vez, decidir muchas
 
@@ -29,7 +29,8 @@ Un modelo de 1.5B en CPU produce pocos tokens por segundo y se equivoca en hecho
 | Paso | Mecanismo | Qué hace |
 |---|---|---|
 | Intake | Decisión tipada | Clasifica cada interés en una taxonomía fija (comida, religión/patrimonio, museos…) |
-| Investigación | Catálogo + generativo | Ciudad en catálogo: barrios, atracciones y costos salen de datos curados; Qwen solo escribe la nota de temporada. Fuera del catálogo: Qwen estima todo. |
+| Datos en vivo | APIs públicas, sin LLM | Geocodifica el destino y consulta en paralelo clima (Open-Meteo), lugares (OpenStreetMap, solo fuera del catálogo) y tipo de cambio (BCE) |
+| Investigación | En vivo + catálogo + generativo | La nota de clima la escribe el código con los datos reales. Ciudad en catálogo: barrios, atracciones y costos curados (con clima real, **cero generación**). Fuera del catálogo: barrios y lugares de OpenStreetMap y Qwen solo estima costos; sin OSM, Qwen estima todo. |
 | Itinerario | Generativo, **una sola vez** | El código decide qué barrio visita cada día y con qué atracciones; Qwen redacta las actividades. |
 | Presupuesto | Código | Alojamiento + comida + actividades + transporte, comparado con el presupuesto |
 | Resolución de conflictos | Decisiones + código | El código calcula el ahorro de cada acción preestablecida; el motor puntúa P(daña los intereses); se elige por `ahorro × (1 − P)` |
@@ -42,7 +43,7 @@ Un modelo de 1.5B en CPU produce pocos tokens por segundo y se equivoca en hecho
 `app/orchestrator.py` (`langgraph==1.2.12`) es un `StateGraph` cuyo estado es el propio `SharedContext`:
 
 ```
-START → intake → destination_research → itinerary_planning → budget
+START → intake → live_data → destination_research → itinerary_planning → budget
 budget ──(excede y quedan iteraciones)──▶ conflict_resolution
 budget ──(cabe, o se alcanzó el tope)──▶ synthesis
 conflict_resolution ──(hay recortes)──▶ revise_itinerary → budget
@@ -53,7 +54,7 @@ synthesis → finish → END
 - **Nodos:** un agente por nodo. Cada nodo devuelve **solo su sección** y el grafo la integra.
 - **Reducers:** `trace` (`operator.add`) y `token_usage` (`add_usage`, suma por agente) acumulan. La memoria compartida es append-only.
 - **Ruteo:** `after_budget` y `after_conflict` son funciones de código, no un LLM. El ciclo de conflicto tiene un tope duro de 2 iteraciones (clamp en la config).
-- **Dependencias por ejecución:** el cliente LLM, el motor de decisiones y el presupuesto de tokens viajan en el *runtime context* (`context_schema=Deps`), no en el estado.
+- **Dependencias por ejecución:** el cliente LLM, el motor de decisiones, los proveedores de datos en vivo y el presupuesto de tokens viajan en el *runtime context* (`context_schema=Deps`), no en el estado.
 - **Eventos en vivo:** los nodos emiten `trace`, `section`, `progress` y `token` con el stream `custom` de LangGraph. `Orchestrator.run` los reenvía por SSE a medida que ocurren.
 - **Diagrama:** `GET /api/graph` devuelve el Mermaid que LangGraph genera del grafo compilado.
 - **Alcance:** LangGraph se usa **solo para orquestar**. El modelo se llama con un cliente Ollama propio, sin wrappers de LangChain.
@@ -64,7 +65,9 @@ synthesis → finish → END
 |---|---|
 | `app/orchestrator.py` | Grafo LangGraph, nodos, ruteo, reenvío de eventos |
 | `app/models.py` | `SharedContext` (contrato y estado del grafo), secciones, esquemas de salida del LLM |
-| `app/agents/destination_research.py` | Camino catálogo (solo temporada) y camino modelo (todo); límites a números del modelo; `clean_area` |
+| `app/live/` | Interfaces `Geocoder`, `WeatherProvider`, `PlacesProvider`, `FxProvider`; implementaciones Open-Meteo, Overpass (OSM + Wikidata), Frankfurter/ExchangeRate-API; `Http` con timeout y caché TTL; `mock` |
+| `app/agents/live_data.py` | Paso de datos en vivo: llamadas en paralelo con timeout, errores no fatales, resumen de clima escrito por código |
+| `app/agents/destination_research.py` | Caminos catálogo, OSM (`source="live"`, el modelo solo estima costos) y modelo; nota de clima real o de temporada; límites a números del modelo; `clean_area` |
 | `app/agents/itinerary_planning.py` | `day_plan()` (barrio + atracciones por día), generación única, normalización (impone el barrio), `revise()` por código, alternativa gratuita por código |
 | `app/agents/budget.py` | Aritmética del presupuesto |
 | `app/agents/conflict_resolution.py` | Ahorros por código, daño por decisiones, selección por utilidad |
@@ -99,6 +102,21 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 - Timeout duro de 180 s.
 - Cancelación de la cadena si el cliente se desconecta.
 - Tope de 2 iteraciones en el ciclo de conflicto.
+- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total; 12 s para Wikidata y para Overpass), un reintento (lugares: Wikidata y luego Overpass), tope de 27 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
+
+### Datos en vivo (fase 1)
+
+| Hecho | Fuente (gratis, sin key) | Uso |
+|---|---|---|
+| Coordenadas y país | Open-Meteo Geocoding | Base de todo lo demás |
+| Clima de las fechas | Open-Meteo: pronóstico si el viaje empieza dentro de ~16 días; si no, las mismas fechas de un año anterior (archivo histórico), marcadas como **referencia** | Nota de clima escrita por código, clima por día, marca de lluvia para el planificador |
+| Barrios y lugares notables | Wikidata (consulta SPARQL geográfica, CC0): barrios + museos, miradores, monumentos, parques…, ordenados por número de enlaces a Wikipedia; respaldo: OpenStreetMap vía Overpass. Cada lugar se empareja por distancia con su barrio | Solo ciudades fuera del catálogo (`source="live"`) |
+| USD → moneda local | Frankfurter (BCE); ExchangeRate-API para monedas que el BCE no publica | Total en moneda local, con tasa, fuente y fecha |
+
+- La fecha de inicio entra en el formulario y en la API (opcional, hasta un año adelante).
+- Cada cifra en vivo muestra su fuente y hora de consulta; la UI lista las atribuciones (CC BY 4.0, ODbL).
+- El modelo nunca reescribe un dato en vivo: temperaturas, lluvia y tasas las escribe el código.
+- Los precios de alojamiento, comida y actividades siguen siendo estimaciones (catálogo o modelo).
 
 ### Infraestructura y CI
 
@@ -107,8 +125,8 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
   - `trip-planner-ollama` (Ollama 0.12.3 con `qwen2.5:1.5b-instruct` incluido, `:11434`, sin descarga al arrancar).
 - **Pod sugerido** (tope 2 vCPU / 4 GiB): Ollama 1.75 vCPU / 3 GiB y app 0.25 vCPU / 1 GiB. `shareable: false`. Datos completos en `docs/HANDOFF.md`.
 - **Workflow `image.yml`:**
-  - `test`: 60 tests sin red, en modo mock;
-  - `e2e`: Qwen real con los límites del pod y 4 viajes reales por SSE;
+  - `test`: 93 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
+  - `e2e`: Qwen real con los límites del pod, APIs de datos en vivo reales y 4 viajes por SSE (fechas dentro y fuera de la ventana de pronóstico);
   - `image`: publica solo en `main` y solo si pasan `test` y `e2e`.
 - **Workflow `model-benchmark.yml`** (manual): los mismos viajes con 1.5B y 3B en paralelo.
 
@@ -121,13 +139,28 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 | Hanói, $400 | catálogo | 28–35 s | ~1020–1060 | 2/3 (métrica); costos creíbles ($45/noche) |
 | Valparaíso, $600 | modelo | 32–36 s | ~1165–1180 | el modelo inventa barrios (limitación esperada) |
 
+Con datos en vivo (e2e con APIs reales; Valparaíso con Wikidata, `c8959d7`):
+
+| Escenario | Datos en vivo | Paso en vivo | Investigación | Total | Tokens |
+|---|---|---|---|---|---|
+| Kioto, en 5 días | pronóstico real 10–24 °C; 1 USD = 157,59 JPY (BCE) | 1,3 s | 0 tokens | 41,7 s | 999 |
+| Lisboa, en 45 días | referencia 2025: 14–20 °C, lluvia 3 de 3 días; 1 USD = 0,877 EUR (BCE) | 4,8 s | 0 tokens | 39,1 s | 886 |
+| Hanói, en 10 días | pronóstico 25–30 °C, lluvia 1 de 2 días; 1 USD = 25 952 VND (ExchangeRate-API) | 8,2 s | 0 tokens | 42,1 s | 849 |
+| Valparaíso, en 7 días | pronóstico 11–17 °C; 1 USD = 963 CLP; **barrios y lugares reales de Wikidata** (Catedral de Valparaíso, Museo a Cielo Abierto, Parque Cultural…), 5/5 en su día | 1,3 s | 189 tokens (solo costos) | 46,3 s | 1173 |
+
+El paso en vivo de las ciudades de catálogo tarda 1–8 s por el atasco de la primera petición a Open-Meteo que absorbe el reintento (ver D17).
+
+Las tres ciudades del catálogo ya no generan nada en la investigación (antes ~90–140 tokens), y el total de tokens bajó en consecuencia.
+
 La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos tokens). La inferencia domina el tiempo; la orquestación no lo afecta de forma medible.
 
 ### Limitaciones conocidas
 
-- Fuera del catálogo, el 1.5B inventa barrios y lugares.
+- Fuera del catálogo, los barrios vienen de Wikidata (u OSM); la cobertura de barrios varía por ciudad (Valparaíso: solo 2, uno con un nombre largo) y, si no hay al menos 2, el 1.5B vuelve a inventar barrios y lugares. El emparejamiento lugar↔barrio es geométrico y puede fallar cerca de un límite.
+- Más allá de ~16 días no hay pronóstico real: se muestra una referencia histórica.
+- Las APIs públicas a veces se atascan en una petición (visto en CI); hay reintento, pero un proveedor puede faltar y la cadena lo reemplaza por catálogo/modelo.
 - El filtro de la narrativa es heurístico: un detalle falso junto a un nombre conocido ("estación Kyoto Central") puede pasar.
-- Los costos son aproximados; no hay precios en vivo ni vuelos.
+- Clima y tipo de cambio son en vivo; los precios (alojamiento, comida, actividades) siguen siendo aproximados y no hay vuelos.
 - El catálogo es curado a mano: los tests garantizan la estructura, no la exactitud de cada ubicación.
 - El motor de decisiones es por reglas: solo entiende las palabras clave de su taxonomía (es/en).
 
@@ -296,6 +329,27 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - **Proxy TLS en `docker build`:** `pip` fallaba al verificar certificados. Se construyó con un Dockerfile temporal que confía en la CA del proxy, sin tocar el `Dockerfile` del repo.
 - **Latencia variable entre runners:** los mismos tokens tardaron entre 21 y 63 s según la máquina. Una subida de latencia se interpreta mirando también los tokens antes de atribuirla a un cambio.
 
+### D17. Datos en vivo sin romper "generar una vez" ni la honestidad
+
+- **Síntoma:** el clima era una frase genérica del modelo ("clima templado"), fuera del catálogo el modelo inventaba barrios (Valparaíso: "Casa Blanca", "Playa de Coquimbo"), y el total solo existía en USD.
+- **Opciones evaluadas:** Amadeus Self-Service (precios de hoteles/vuelos) cierra en julio de 2026; las alternativas de precios piden key y acuerdo comercial. Se dejó para una fase 2 y se eligieron fuentes gratuitas y sin key para los hechos que cambian: clima, lugares y tipo de cambio.
+- **Solución:**
+  - un nodo `live_data` en LangGraph, sin LLM, entre `intake` y la investigación; consulta en paralelo y cada proveedor está detrás de una interfaz (igual que el motor de decisiones);
+  - la nota de clima la escribe el código a partir de los números: en ciudades del catálogo con clima real, la investigación ya **no genera nada** (0 tokens);
+  - fuera de la ventana de pronóstico se usa el mismo rango de fechas de un año anterior, rotulado como referencia para no presentarlo como pronóstico;
+  - fuera del catálogo, OSM aporta barrios y lugares notables (filtro: enlazados a Wikidata) y el código empareja cada lugar con su barrio más cercano, reproduciendo el emparejamiento barrio↔atracción del catálogo (D9); el modelo solo estima costos;
+  - los días con lluvia probable llegan marcados al planificador (`"rain": true`), que prefiere actividades bajo techo;
+  - el total en moneda local lo calcula y escribe el código, con tasa, fuente y fecha.
+- **Desafío del entorno:** el sandbox de desarrollo no tiene salida a esas APIs (igual que con Qwen, D6). Los proveedores se probaron con respuestas HTTP simuladas y la validación real quedó en el e2e de CI.
+- **Hallazgo del primer e2e real:** Kioto salió completo (pronóstico real 10–24 °C, 1 USD = 157,59 JPY del BCE, investigación con 0 tokens), pero tres peticiones sueltas a Open-Meteo se atascaron hasta el timeout (geocodificación de Lisboa y Valparaíso, pronóstico de Hanói) mientras las siguientes respondían al instante. La cadena cayó correctamente a catálogo/modelo y lo dijo en el trace. Se añadió un reintento (solo para timeouts, errores de conexión y 5xx), timeout de conexión de 3 s y registro de cada fallo con su duración.
+- **Segundo e2e real:** los logs mostraron un patrón claro: la *primera* petición a Open-Meteo de cada viaje se atasca 3 s (timeout de conexión) y el reintento responde al instante. Con el reintento, las cuatro ciudades obtuvieron clima y tipo de cambio reales. Lo único que faltó fue OSM: la instancia pública de Overpass respondió `504 Gateway Timeout` (sobrecarga habitual). Se añadió una segunda instancia pública (`overpass.private.coffee`) como respaldo; `OVERPASS_URL` acepta una lista.
+- **Tercer e2e real:** clima y tipo de cambio otra vez reales en los cuatro viajes, pero **las dos** instancias de Overpass agotaron su timeout de 10 s. Si fallan dos servidores independientes, el problema era la consulta, no la carga: una búsqueda por radio (`around`) sobre nodos, vías *y relaciones*, con `out center` en relaciones (el servidor resuelve la geometría de cada miembro). Se reescribió con una caja delimitadora (usa el índice espacial) y solo nodos y vías; el log registra ahora cuántos elementos devuelve y en cuánto tiempo.
+- **Cuarto e2e real:** aun con la consulta liviana, `overpass-api.de` respondió 504 y la segunda instancia agotó el timeout. Con cuatro corridas se ve que las instancias públicas de Overpass no son fiables desde runners compartidos, y cada fallo sumaba ~28 s al viaje. Se pasó a **Wikidata** como fuente principal de lugares (SPARQL geográfico: barrios y lugares por clase, con coordenadas y número de enlaces a Wikipedia como medida de notoriedad), con Overpass (una instancia) de respaldo. El emparejamiento barrio↔lugar se extrajo a una función común (`pair`), igual para ambas fuentes.
+- **Quinto e2e real:** Wikidata respondió en **0,5 s** (77 filas: 2 barrios, 75 lugares). Valparaíso pasó de barrios inventados por el modelo ("Casa Blanca", "Playa de Coquimbo", "La Mocha") a lugares reales, con 5/5 atracciones en su día y el paso en vivo de 28 s a 1,3 s. Queda un detalle visible: Wikidata tiene pocos barrios de Valparaíso clasificados como tales (los cerros suelen figurar como colinas), y uno de los dos es la etiqueta larga del sitio UNESCO ("Barrio histórico de la ciudad portuaria de Valparaíso"). Es un nombre real, así que se deja tal cual.
+- **Dónde:** `app/live/`, `app/agents/live_data.py`, `app/agents/destination_research.py`, `app/agents/itinerary_planning.py` (`forecast_days`, marca de lluvia), `app/agents/synthesis.py` (`local_fx`), `static/app.js` (panel de fuentes).
+- **Dónde (lugares):** `app/live/wikidata.py` (`WikidataPlaces`, `PlacesChain`), `app/live/osm.py` (`OverpassPlaces`, `pair`).
+- **Evidencia:** 30 tests nuevos (28 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
+
 ---
 
 ## 3. Cronología
@@ -313,6 +367,7 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 | 2026-09-27 | 3e | Atracciones gratuitas, filtro de narrativa (D10, D12) | `4321762`, `9bbd063` |
 | 2026-09-27 | — | **MVP fusionado a `main`** e imágenes publicadas en GHCR | PR #1 → `4c6f232` |
 | 2026-09-27 | 4 | Orquestación con LangGraph (D15) | PR #2 → `223bd7e` |
+| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, lugares (Wikidata/OSM), tipo de cambio, fecha de viaje (D17) | `213f143`, `431b239`, `fe5498c`, `bc06e24`, Wikidata |
 
 ---
 
@@ -324,3 +379,6 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - [ ] Cuando haya acceso a JEV: `JevDecisionEngine.evaluate()` + `DECISION_ENGINE=jev` (necesita `TYPESAFE_API_KEY` y salida a la red).
 - [ ] Mediciones de latencia con varias ejecuciones por escenario (mediana) para el post.
 - [ ] Capturas del panel de trace y del grafo (`/api/graph`) para el post.
+- [ ] Datos en vivo, fase 2: precios reales de alojamiento/vuelos detrás de un `PriceProvider` (requiere key y acuerdo comercial; Amadeus Self-Service cierra en julio de 2026).
+- [ ] Revisar la calidad de Wikidata/OSM en más ciudades fuera del catálogo (nombres de barrios, lugares cerca de los límites).
+- [ ] Uso comercial: Open-Meteo gratis es no comercial; si el demo cambia de naturaleza, plan comercial u otro proveedor detrás de la misma interfaz, y Overpass propio (`OVERPASS_URL`).

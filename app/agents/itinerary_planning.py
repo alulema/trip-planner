@@ -19,6 +19,7 @@ from ..models import (
     ItineraryPlanningOutput,
     SharedContext,
     TokenUsage,
+    WeatherDay,
 )
 from . import compact, language_rule
 
@@ -32,6 +33,7 @@ same day number and the same area.
   experiences for the whole group (not lodging, meals or transport). Museums, temples, tours
   and shows usually charge; typical city days cost about 10 to 60 USD per person.
 - free_alternative: one free activity in the same area that could replace the paid ones.
+If a day has "rain": true, prefer indoor activities that day.
 Match the activities to the traveller's interests.
 Write every activity in the requested language; keep the place names from day_plan exactly
 as written (do not translate them, do not switch to another language around them)."""
@@ -62,10 +64,12 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
 
 def day_plan(ctx: SharedContext) -> list[dict]:
     """Which area each day visits, decided by code (round-robin over the research areas), plus
-    the highlights that are really in that area when the catalog knows them. A revisit of an
-    area gets no highlights, so the model explores other spots instead of repeating them."""
+    the highlights that are really in that area when the catalog (or a live places source) knows
+    them. A revisit of an area gets no highlights, so the model explores other spots instead
+    of repeating them. Days with rain in the real forecast are flagged."""
     req, research = ctx.user_request, ctx.destination_research
     areas = research.recommended_areas or [req.destination]  # type: ignore[union-attr]
+    forecast = forecast_days(ctx)
     plan = []
     for n in range(1, req.days + 1):
         area = areas[(n - 1) % len(areas)]
@@ -73,16 +77,25 @@ def day_plan(ctx: SharedContext) -> list[dict]:
         highlights = research.area_highlights.get(area)  # type: ignore[union-attr]
         if highlights and n <= len(areas):
             entry["highlights"] = highlights
+        if n - 1 < len(forecast) and forecast[n - 1].rainy:
+            entry["rain"] = True
         plan.append(entry)
     return plan
 
 
+def forecast_days(ctx: SharedContext) -> list[WeatherDay]:
+    """Per-day weather, only when it is a real forecast (a reference year says nothing about
+    a given day)."""
+    weather = ctx.live_data.weather if ctx.live_data else None
+    return weather.days if weather and weather.kind == "forecast" else []
+
+
 def free_alternative(ctx: SharedContext, area: str, generated: str) -> str:
-    """For catalog cities the free fallback is written by code and anchored to the day's area:
+    """For catalog (and live-places) cities the free fallback is written by code and anchored to the day's area:
     when the budget loop swaps it in, the model can't send every day to the same district
     (seen in a real run: "Explore Alfama's streets" for Baixa, Alfama and Belém)."""
     research = ctx.destination_research
-    if research is None or research.source != "catalog":
+    if research is None or not research.area_highlights:
         return generated.strip()
     es = ctx.user_request.lang == "es"
     text = f"Paseo libre por {area}" if es else f"Free walk around {area}"
@@ -99,6 +112,7 @@ def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDra
     ref = ctx.destination_research.reference_costs  # type: ignore[union-attr]
     max_day_cost = 250.0 * req.travelers
     plan = day_plan(ctx)
+    forecast = forecast_days(ctx)
     by_day = {d.day: d for d in out.days}
     ordered = sorted(out.days, key=lambda d: d.day)
     days = []
@@ -113,6 +127,7 @@ def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDra
             activities=[a.strip() for a in src.activities if a.strip()][:4],
             estimated_cost_usd=round(min(max_day_cost, max(0.0, src.estimated_cost_usd)), 2),
             free_alternative=free_alternative(ctx, plan[n - 1]["area"], src.free_alternative),
+            weather=forecast[n - 1] if n - 1 < len(forecast) else None,
         ))
     return ItineraryDraft(
         days=days,

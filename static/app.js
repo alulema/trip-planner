@@ -9,7 +9,10 @@
       about: "Acerca de", destination: "Destino", days: "Días", budget: "Presupuesto (USD)",
       travelers: "Viajeros", interests: "Intereses (separados por coma)", interestsPh: "comida, centro histórico",
       plan: "Planificar viaje", planning: "Planificando…", lowball: "Probar presupuesto irreal ($50)",
-      disclaimer: "Estimaciones generadas por IA, no tarifas en tiempo real.",
+      disclaimer: "Clima, lugares y tipo de cambio en vivo cuando están disponibles; los costos son estimaciones, no tarifas en tiempo real.",
+      startDate: "Fecha de inicio", a_live_data: "Datos en vivo", srcLive: "datos: en vivo", places: "Lugares",
+      weather: "Clima", fx: "Tipo de cambio", sources: "Fuentes", fetched: "consultado", liveMissing: "sin datos en vivo",
+      forecastTag: "pronóstico real", referenceTag: "referencia histórica",
       trace: "Agent trace", itinerary: "Itinerario",
       traceEmpty: "Envía un viaje para ver a los agentes trabajar.",
       resultEmpty: "El itinerario aparecerá aquí día por día.",
@@ -32,7 +35,10 @@
       about: "About", destination: "Destination", days: "Days", budget: "Budget (USD)",
       travelers: "Travelers", interests: "Interests (comma separated)", interestsPh: "food, historic center",
       plan: "Plan trip", planning: "Planning…", lowball: "Try an unrealistic budget ($50)",
-      disclaimer: "AI-generated estimates, not live prices.",
+      disclaimer: "Live weather, places and exchange rate when available; costs are estimates, not live prices.",
+      startDate: "Start date", a_live_data: "Live data", srcLive: "data: live", places: "Places",
+      weather: "Weather", fx: "Exchange rate", sources: "Sources", fetched: "fetched", liveMissing: "no live data",
+      forecastTag: "real forecast", referenceTag: "historical reference",
       trace: "Agent trace", itinerary: "Itinerary",
       traceEmpty: "Submit a trip to watch the agents work.",
       resultEmpty: "The itinerary will appear here day by day.",
@@ -61,6 +67,21 @@
     return n;
   };
   const usd = (v) => "$" + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const num = (v, digits) => Number(v).toLocaleString(lang, { maximumFractionDigits: digits });
+
+  // WMO weather code → icon (Open-Meteo uses WMO codes).
+  function weatherIcon(code) {
+    if (code == null) return "🌡️";
+    if (code === 0) return "☀️";
+    if (code <= 2) return "🌤️";
+    if (code === 3) return "☁️";
+    if (code === 45 || code === 48) return "🌫️";
+    if (code >= 95) return "⛈️";
+    if (code >= 85) return "🌨️";
+    if (code >= 80) return "🌦️";
+    if (code >= 71 && code <= 77) return "❄️";
+    return "🌧️";
+  }
 
   // Resolved early by demo-info.js (so the About panel uses the same language).
   let lang = document.documentElement.lang === "en" ? "en" : "es";
@@ -70,6 +91,7 @@
   let startedAt = 0;
   let tokenLimit = 0;
   let running = false;
+  let live = null; // live_data section of the current run
 
   function applyI18n() {
     document.documentElement.lang = lang;
@@ -86,7 +108,8 @@
       const badge = $("mode-badge");
       badge.hidden = false;
       const llm = cfg.llm_mode === "mock" ? t("mock") : cfg.model + (cfg.llm_ready ? "" : ` (${t("warming")})`);
-      badge.textContent = `${llm} · ${t("decisionsBy")}: ${t(cfg.decision_engine)}`;
+      const liveMode = cfg.live_data === "off" ? "off" : cfg.live_data === "mock" ? t("mock") : "on";
+      badge.textContent = `${llm} · ${t("decisionsBy")}: ${t(cfg.decision_engine)} · ${t("a_live_data").toLowerCase()}: ${liveMode}`;
       badge.dataset.mode = cfg.llm_mode;
     } catch (_) { /* optional */ }
   }
@@ -96,7 +119,8 @@
   function resetUI() {
     $("trace").replaceChildren();
     $("days").replaceChildren();
-    ["profile", "research", "budget-box", "conflict-box", "summary", "status-pill"].forEach((id) => { $(id).hidden = true; });
+    live = null;
+    ["profile", "research", "budget-box", "conflict-box", "summary", "status-pill", "sources"].forEach((id) => { $(id).hidden = true; });
     $("result-empty").hidden = false;
     $("token-meter").textContent = "";
     document.querySelectorAll("#chain li").forEach((li) => { li.className = ""; });
@@ -188,8 +212,12 @@
   function renderResearch(r) {
     const box = $("research");
     box.replaceChildren();
-    const season = el("div", null, `${t("season")}: ${r.season_notes} `);
-    season.append(el("span", "tag", r.source === "catalog" ? t("srcCatalog") : t("srcModel")));
+    const w = live && live.weather;
+    const season = el("div", null, `${w ? t("weather") : t("season")}: ${r.season_notes} `);
+    if (w) season.append(el("span", "tag", w.kind === "forecast" ? t("forecastTag") : t("referenceTag")));
+    const srcTag = { catalog: "srcCatalog", live: "srcLive", model: "srcModel" }[r.source] || "srcModel";
+    const liveName = r.source === "live" && live && live.places ? live.places.source.name.split(" (")[0] : null;
+    season.append(el("span", "tag", liveName ? `${t("srcLive").split(":")[0]}: ${liveName}` : t(srcTag)));
     box.append(season);
     box.append(el("div", "areas", `${t("areas")}: ${r.recommended_areas.join(" · ")}`));
     if (r.highlights && r.highlights.length) box.append(el("div", "areas", `${t("highlights")}: ${r.highlights.join(" · ")}`));
@@ -212,6 +240,12 @@
         title.append(el("span", "area", d.area));
         const cost = el("span", "cost", `${usd(d.estimated_cost_usd)} ${t("activities")}`);
         if (d.adjusted) cost.prepend(el("span", "tag", t("adjusted")));
+        if (d.weather && d.weather.t_max_c != null) {
+          const wx = d.weather;
+          const temps = wx.t_min_c != null ? `${Math.round(wx.t_min_c)}–${Math.round(wx.t_max_c)} °C` : `${Math.round(wx.t_max_c)} °C`;
+          const rain = wx.precip_probability != null ? ` · ${Math.round(wx.precip_probability)}%` : "";
+          title.append(el("span", "wx", ` ${weatherIcon(wx.weather_code)} ${temps}${rain}`));
+        }
         head.append(title, cost);
         const ul = el("ul");
         d.activities.forEach((a) => ul.append(el("li", null, a)));
@@ -238,7 +272,42 @@
     [["lodging", b.breakdown.lodging], ["food", b.breakdown.food], ["acts", b.breakdown.activities], ["transport", b.breakdown.transport]]
       .forEach(([k, v]) => { const c = el("div"); c.append(el("small", null, t(k)), document.createTextNode(usd(v))); grid.append(c); });
     box.append(total, grid);
+    const fx = live && live.fx && live.fx.currency !== "USD" ? live.fx : null;
+    if (fx) {
+      box.append(el("div", "fx", `≈ ${num(b.estimated_total_usd * fx.rate, 0)} ${fx.currency} · ${t("fx")}: 1 USD = ${num(fx.rate, 4)} ${fx.currency}`));
+    }
     box.hidden = false;
+  }
+
+  // Live data: keep it for the other panels and list every source with its attribution.
+  function renderLive(data) {
+    live = data;
+    const box = $("sources");
+    box.replaceChildren(el("strong", null, `${t("sources")}: `));
+    const items = [];
+    if (data.weather) items.push([t("weather"), data.weather.source]);
+    if (data.places) items.push([t("places"), data.places.source]);
+    if (data.fx && data.fx.currency !== "USD") items.push([t("fx"), data.fx.source]);
+    items.forEach(([label, src], i) => {
+      const span = el("span", "src");
+      const time = new Date(src.fetched_at).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" });
+      span.append(document.createTextNode(`${label}: `));
+      if (/^https:\/\//.test(src.url)) {
+        const a = el("a", null, src.attribution);
+        a.href = src.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+        span.append(a);
+      } else {
+        span.append(document.createTextNode(src.attribution));
+      }
+      span.append(document.createTextNode(` (${t("fetched")} ${time})`));
+      if (i) box.append(document.createTextNode(" · "));
+      box.append(span);
+    });
+    const missing = Object.keys(data.errors || {});
+    if (missing.length) {
+      box.append(el("div", "missing", `${t("liveMissing")}: ${missing.map((k) => `${k} (${data.errors[k]})`).join(", ")}`));
+    }
+    box.hidden = !items.length && !missing.length;
   }
 
   function renderConflict(c) {
@@ -291,6 +360,7 @@
       budget_usd: overrides && overrides.budget_usd ? overrides.budget_usd : form.get("budget_usd"),
       travelers: form.get("travelers"),
       interests: form.get("interests"),
+      start_date: form.get("start_date"),
       lang,
     });
     resetUI();
@@ -308,6 +378,7 @@
       const { key, value } = JSON.parse(e.data);
       if (!value) return;
       if (key === "interest_profile") renderProfile(value);
+      else if (key === "live_data") renderLive(value);
       else if (key === "destination_research") renderResearch(value);
       else if (key === "itinerary_draft") renderDraft(value);
       else if (key === "budget_analysis") renderBudget(value, budgetUsd);
@@ -348,6 +419,17 @@
   });
   // The panel is optional: hide its button if the shared script didn't load.
   window.addEventListener("load", () => { if (!window.DemoPanel) $("about-btn").hidden = true; });
+
+  // Travel dates: default two weeks ahead (inside the real-forecast window), up to a year out.
+  (function initDate() {
+    const input = document.querySelector('input[name="start_date"]');
+    const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const day = 86400000;
+    const now = new Date();
+    input.min = iso(now);
+    input.max = iso(new Date(now.getTime() + 365 * day));
+    if (!input.value) input.value = iso(new Date(now.getTime() + 14 * day));
+  })();
 
   applyI18n();
   loadConfig();

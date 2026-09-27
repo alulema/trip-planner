@@ -26,6 +26,10 @@ class Settings:
     llm_mode: str
     ollama_host: str
     ollama_model: str
+    # Live data (weather, places, exchange rates): "on" calls the public APIs, "mock" returns
+    # canned data (offline), "off" skips the step. Defaults to "mock" when the LLM is mocked.
+    live_data: str
+    overpass_urls: tuple[str, ...]
     # Engine for the non-generative decisions (see app/decisions). Only "rules" today.
     decision_engine: str
 
@@ -45,6 +49,10 @@ def load_settings() -> Settings:
         llm_mode=os.environ.get("LLM_MODE", "ollama").strip().lower(),
         ollama_host=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
         ollama_model=os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b-instruct"),
+        live_data=(os.environ.get("LIVE_DATA", "").strip().lower()
+                   or ("mock" if os.environ.get("LLM_MODE", "ollama").strip().lower() == "mock" else "on")),
+        # Comma-separated Overpass endpoints, tried in order (empty = the public defaults).
+        overpass_urls=tuple(u.strip() for u in os.environ.get("OVERPASS_URL", "").split(",") if u.strip()),
         decision_engine=os.environ.get("DECISION_ENGINE", "rules").strip().lower(),
         max_sessions_per_hour=_int("MAX_SESSIONS_PER_HOUR", 30),
         max_requests_per_ip_per_hour=_int("MAX_REQUESTS_PER_IP_PER_HOUR", 10),

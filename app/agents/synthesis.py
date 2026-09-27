@@ -18,7 +18,7 @@ from ..decisions.rules import normalize
 from ..decisions.taxonomy import ACTIONS_BY_ID
 from ..guardrails import TokenBudget
 from ..llm_client import LLMClient, OnToken
-from ..models import FinalItinerary, SharedContext, TokenUsage
+from ..models import FinalItinerary, FxQuote, SharedContext, TokenUsage
 from . import compact, language_rule
 
 SYSTEM = """You write a short, warm description of a trip itinerary for the traveller.
@@ -113,6 +113,7 @@ def known_place_stems(ctx: SharedContext) -> set[str]:
 def build_final(ctx: SharedContext, summary: str) -> FinalItinerary:
     draft, analysis = ctx.itinerary_draft, ctx.budget_analysis
     assert draft is not None and analysis is not None
+    fx = local_fx(ctx)
     return FinalItinerary(
         summary=summary.strip(),
         days=draft.days,
@@ -120,7 +121,15 @@ def build_final(ctx: SharedContext, summary: str) -> FinalItinerary:
         budget_usd=ctx.user_request.budget_usd,
         within_budget=analysis.within_budget,
         breakdown=analysis.breakdown,
+        fx=fx,
+        total_local=round(analysis.estimated_total_usd * fx.rate, 2) if fx else None,
     )
+
+
+def local_fx(ctx: SharedContext) -> FxQuote | None:
+    """The live USD → local rate, when the destination doesn't already use USD."""
+    fx = ctx.live_data.fx if ctx.live_data else None
+    return fx if fx is not None and fx.currency != "USD" else None
 
 
 def budget_paragraph(ctx: SharedContext) -> str:
@@ -131,8 +140,10 @@ def budget_paragraph(ctx: SharedContext) -> str:
     total, cap = f"${analysis.estimated_total_usd:,.0f}", f"${req.budget_usd:,.0f}"
     actions = [ACTIONS_BY_ID[a] for a in conflict.applied_action_ids if a in ACTIONS_BY_ID]
     names = "; ".join((a.description_es if es else a.description_en).lower() for a in actions)
+    fx = local_fx(ctx)
+    local = f" (≈ {analysis.estimated_total_usd * fx.rate:,.0f} {fx.currency})" if fx else ""
     if es:
-        text = f"Costo estimado: {total} USD para un presupuesto de {cap}."
+        text = f"Costo estimado: {total} USD{local} para un presupuesto de {cap}."
         if actions:
             text += f" Para recortar se aplicó: {names}."
         if analysis.within_budget:
@@ -140,8 +151,10 @@ def budget_paragraph(ctx: SharedContext) -> str:
         else:
             text += (f" Aun así excede el presupuesto por ${analysis.over_budget_by_usd:,.0f}: "
                      "considera ampliar el presupuesto o acortar el viaje.")
-        return text + " Cifras estimadas por IA, no tarifas en tiempo real."
-    text = f"Estimated cost: {total} USD against a {cap} budget."
+        if fx:
+            text += f" Cambio: 1 USD = {fx.rate:,.4g} {fx.currency} ({fx.source.name}, {fx.as_of})."
+        return text + " Costos estimados (catálogo o IA), no tarifas en tiempo real."
+    text = f"Estimated cost: {total} USD{local} against a {cap} budget."
     if actions:
         text += f" To cut costs we applied: {names}."
     if analysis.within_budget:
@@ -149,7 +162,9 @@ def budget_paragraph(ctx: SharedContext) -> str:
     else:
         text += (f" It is still ${analysis.over_budget_by_usd:,.0f} over budget: consider raising the "
                  "budget or shortening the trip.")
-    return text + " Figures are AI estimates, not live prices."
+    if fx:
+        text += f" Rate: 1 USD = {fx.rate:,.4g} {fx.currency} ({fx.source.name}, {fx.as_of})."
+    return text + " Costs are estimates (catalog or AI), not live prices."
 
 
 def fallback_summary(ctx: SharedContext) -> str:

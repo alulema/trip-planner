@@ -7,6 +7,9 @@ through reducers declared on the model). Every node reports what it does as it h
 trace, section, progress and token events — through LangGraph's custom stream; that stream
 is what the UI renders live.
 
+Facts come from live sources first (live_data: real weather, places and exchange rate; no
+LLM), then the curated catalog, and only then the model.
+
 Reasoning is split in two kinds, and each step uses the cheapest one that does the job:
   * generative (local Qwen via Ollama): research, the itinerary (once), the final narrative;
   * non-generative (decision engine: rules today, Jev-ready): interest classification,
@@ -14,7 +17,7 @@ Reasoning is split in two kinds, and each step uses the cheapest one that does t
 
 Control flow is deterministic — the routing functions are plain code, not an LLM:
 
-    intake → destination_research → itinerary_planning → budget
+    intake → live_data → destination_research → itinerary_planning → budget
       budget ──(over budget, iterations left)──▶ conflict_resolution
       conflict_resolution ──(actions chosen)──▶ revise_itinerary → budget
       conflict_resolution ──(catalog exhausted)──▶ synthesis
@@ -33,9 +36,10 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from .agents import budget as budget_agent
-from .agents import conflict_resolution, destination_research, interests, itinerary_planning, synthesis
+from .agents import conflict_resolution, destination_research, interests, itinerary_planning, live_data, synthesis
 from .decisions import DecisionEngine
 from .guardrails import TokenBudget, TokenBudgetExceeded
+from .live import LiveServices
 from .llm_client import LLMClient, LLMError
 from .models import AgentName, DecisionRecord, SharedContext, TokenUsage, TraceEntry, TraceEvent
 
@@ -57,6 +61,7 @@ class Deps:
     budget: TokenBudget
     token_limit: int
     max_conflict_iterations: int
+    live: LiveServices | None = None
 
 
 # --------------------------------------------------------------------------- node helpers
@@ -82,7 +87,7 @@ class Reporter:
         self.trace_event(agent, "decision", decision=record)
 
     def section(self, key: str, value: Any) -> None:
-        self.event("section", {"key": key, "value": value.model_dump() if value is not None else None})
+        self.event("section", {"key": key, "value": value.model_dump(mode="json") if value is not None else None})
 
     def progress(self, agent: str) -> Callable[[int], Awaitable[None]]:
         async def cb(tokens: int) -> None:
@@ -109,13 +114,35 @@ class Reporter:
 async def intake(state: SharedContext, runtime: Runtime[Deps]) -> dict:
     deps, rep = runtime.context, Reporter()
     rep.trace_event("orchestrator", "plan_created", message=(
-        f"intake → research → itinerary → budget → [conflict loop ≤{deps.max_conflict_iterations}] → synthesis"
-        f" · llm={deps.llm.model} · decisions={deps.engine.name} · {deps.token_limit} tokens · langgraph"))
+        f"intake → live data → research → itinerary → budget → [conflict loop ≤{deps.max_conflict_iterations}]"
+        f" → synthesis · llm={deps.llm.model} · decisions={deps.engine.name}"
+        f" · live={deps.live.name if deps.live else 'off'} · {deps.token_limit} tokens · langgraph"))
     profile, records = await interests.classify(state, deps.engine)
     for rec in records:
         rep.decision("orchestrator", rec)
     rep.section("interest_profile", profile)
     return {"interest_profile": profile, "trace": rep.trace}
+
+
+async def fetch_live_data(state: SharedContext, runtime: Runtime[Deps]) -> dict:
+    """Real weather, places and exchange rate, fetched in parallel. Never fatal: whatever
+    is missing falls back to the catalog or the model, and the trace says why."""
+    deps, rep = runtime.context, Reporter()
+    if deps.live is None:
+        return {}
+    rep.trace_event("live_data", "started", message="geocoding · weather · places · fx")
+    t0 = time.perf_counter()
+    data = await live_data.run(state, deps.live)
+    rep.trace_event("live_data", "completed", duration_ms=_ms(t0), tokens=0, message=live_data.describe(data))
+    rep.section("live_data", data)
+    return {"live_data": data, "trace": rep.trace}
+
+
+RESEARCH_SOURCES = {
+    "catalog": "source: catalog (areas, highlights, costs)",
+    "live": "source: live places (areas, highlights) + model (costs)",
+    "model": "source: model (not in catalog)",
+}
 
 
 async def research(state: SharedContext, runtime: Runtime[Deps]) -> dict:
@@ -125,8 +152,8 @@ async def research(state: SharedContext, runtime: Runtime[Deps]) -> dict:
             "destination_research",
             lambda: destination_research.run(state, deps.llm, deps.budget,
                                              on_progress=rep.progress("destination_research")),
-            describe=lambda r: ("source: catalog (areas, highlights, costs) + model (season)"
-                                if r.source == "catalog" else "source: model (not in catalog)"))
+            describe=lambda r: RESEARCH_SOURCES[r.source] + (
+                " · season: live weather" if destination_research.live_weather_note(state) else ""))
     except (LLMError, TokenBudgetExceeded) as exc:
         # Mandatory step: without research there is nothing to show.
         raise ChainError(str(exc)) from exc
@@ -256,6 +283,7 @@ def after_conflict(state: SharedContext) -> str:
 def build_graph():
     g = StateGraph(SharedContext, context_schema=Deps)
     g.add_node("intake", intake)
+    g.add_node("live_data", fetch_live_data)
     g.add_node("destination_research", research)
     g.add_node("itinerary_planning", plan_itinerary)
     g.add_node("budget", check_budget)
@@ -265,7 +293,8 @@ def build_graph():
     g.add_node("finish", finish)
 
     g.add_edge(START, "intake")
-    g.add_edge("intake", "destination_research")
+    g.add_edge("intake", "live_data")
+    g.add_edge("live_data", "destination_research")
     g.add_edge("destination_research", "itinerary_planning")
     g.add_edge("itinerary_planning", "budget")
     g.add_conditional_edges("budget", after_budget, ["conflict_resolution", "synthesis"])
@@ -288,7 +317,9 @@ def graph_mermaid() -> str:
 
 
 class Orchestrator:
-    def __init__(self, llm: LLMClient, engine: DecisionEngine, token_limit: int, max_conflict_iterations: int = 2):
+    def __init__(self, llm: LLMClient, engine: DecisionEngine, token_limit: int, max_conflict_iterations: int = 2,
+                 live: LiveServices | None = None):
+        self.live = live
         self.llm = llm
         self.engine = engine
         self.token_limit = token_limit
@@ -298,7 +329,7 @@ class Orchestrator:
         """Run the graph, forwarding every streamed event to `emit`. The final state is
         copied back into `ctx`, so callers keep working with the object they passed in."""
         deps = Deps(self.llm, self.engine, TokenBudget(self.token_limit), self.token_limit,
-                    self.max_conflict_iterations)
+                    self.max_conflict_iterations, self.live)
         final: dict | None = None
         async for mode, chunk in GRAPH.astream(ctx, context=deps, stream_mode=["custom", "values"]):
             if mode == "custom":
