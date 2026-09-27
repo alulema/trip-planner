@@ -165,7 +165,7 @@ def build_live(mode: str, transport: httpx.AsyncBaseTransport | None = None,
         geocoder=OpenMeteoGeocoder(Http(24 * 3600, transport=transport)),
         weather=OpenMeteoWeather(Http(3600, transport=transport)),
         # Overpass: no retry on the same instance; the next instance is the retry.
-        places=OverpassPlaces(Http(24 * 3600, timeout_seconds=10, transport=transport, retries=0), urls=overpass_urls),
+        places=OverpassPlaces(Http(24 * 3600, timeout_seconds=13, transport=transport, retries=0), urls=overpass_urls),
         fx=FxChain(Http(6 * 3600, transport=transport)),
-        timeout_seconds=22,
+        timeout_seconds=27,
     )

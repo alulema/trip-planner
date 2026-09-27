@@ -102,7 +102,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 - Timeout duro de 180 s.
 - Cancelación de la cadena si el cliente se desconecta.
 - Tope de 2 iteraciones en el ciclo de conflicto.
-- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total; 10 s por instancia de Overpass), un reintento (Overpass: segunda instancia pública), tope de 22 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
+- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total; 13 s por instancia de Overpass), un reintento (Overpass: segunda instancia pública), tope de 27 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
 
 ### Datos en vivo (fase 1)
 
@@ -341,6 +341,7 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - **Desafío del entorno:** el sandbox de desarrollo no tiene salida a esas APIs (igual que con Qwen, D6). Los proveedores se probaron con respuestas HTTP simuladas y la validación real quedó en el e2e de CI.
 - **Hallazgo del primer e2e real:** Kioto salió completo (pronóstico real 10–24 °C, 1 USD = 157,59 JPY del BCE, investigación con 0 tokens), pero tres peticiones sueltas a Open-Meteo se atascaron hasta el timeout (geocodificación de Lisboa y Valparaíso, pronóstico de Hanói) mientras las siguientes respondían al instante. La cadena cayó correctamente a catálogo/modelo y lo dijo en el trace. Se añadió un reintento (solo para timeouts, errores de conexión y 5xx), timeout de conexión de 3 s y registro de cada fallo con su duración.
 - **Segundo e2e real:** los logs mostraron un patrón claro: la *primera* petición a Open-Meteo de cada viaje se atasca 3 s (timeout de conexión) y el reintento responde al instante. Con el reintento, las cuatro ciudades obtuvieron clima y tipo de cambio reales. Lo único que faltó fue OSM: la instancia pública de Overpass respondió `504 Gateway Timeout` (sobrecarga habitual). Se añadió una segunda instancia pública (`overpass.private.coffee`) como respaldo; `OVERPASS_URL` acepta una lista.
+- **Tercer e2e real:** clima y tipo de cambio otra vez reales en los cuatro viajes, pero **las dos** instancias de Overpass agotaron su timeout de 10 s. Si fallan dos servidores independientes, el problema era la consulta, no la carga: una búsqueda por radio (`around`) sobre nodos, vías *y relaciones*, con `out center` en relaciones (el servidor resuelve la geometría de cada miembro). Se reescribió con una caja delimitadora (usa el índice espacial) y solo nodos y vías; el log registra ahora cuántos elementos devuelve y en cuánto tiempo.
 - **Dónde:** `app/live/`, `app/agents/live_data.py`, `app/agents/destination_research.py`, `app/agents/itinerary_planning.py` (`forecast_days`, marca de lluvia), `app/agents/synthesis.py` (`local_fx`), `static/app.js` (panel de fuentes).
 - **Evidencia:** 28 tests nuevos (26 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
 

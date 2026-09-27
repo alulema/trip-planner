@@ -7,13 +7,19 @@ the catalog provides, so the itinerary keeps landmarks in the right district."""
 
 from __future__ import annotations
 
+import logging
 import math
+import time
+
+import httpx
 
 from ..decisions.rules import normalize
 from ..models import GeoPoint, PlacesReport, SourceInfo
 from . import Http, LiveError
 
 # Public instances, tried in order: the main one often answers 504 when it is busy (seen in CI).
+log = logging.getLogger("trip_planner.live")
+
 OVERPASS_URLS = ("https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter")
 ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
 
@@ -42,14 +48,26 @@ def radius_for(point: GeoPoint) -> int:
     return 4000
 
 
+def bbox(point: GeoPoint) -> str:
+    """South,west,north,east around the centre. A bounding box uses Overpass's spatial index;
+    a radius search (`around`) over ways and relations timed out on both public instances."""
+    r = radius_for(point)
+    dlat = r / 111_320
+    dlon = r / (111_320 * max(0.2, math.cos(math.radians(point.latitude))))
+    return (f"{point.latitude - dlat:.5f},{point.longitude - dlon:.5f},"
+            f"{point.latitude + dlat:.5f},{point.longitude + dlon:.5f}")
+
+
 def build_query(point: GeoPoint) -> str:
-    r, lat, lon = radius_for(point), point.latitude, point.longitude
-    around = f"(around:{r},{lat},{lon})"
+    """Nodes and ways only: `out center` on relations makes the server resolve every member's
+    geometry, which is what made the first version of this query time out."""
+    box = bbox(point)
     by_key: dict[str, list[str]] = {}
     for key, value in KINDS:
         by_key.setdefault(key, []).append(value)
-    pois = "".join(f'nwr{around}["{k}"~"^({"|".join(vs)})$"]["wikidata"]["name"];' for k, vs in by_key.items())
-    return (f'[out:json][timeout:10];(node{around}["place"~"^(suburb|quarter|neighbourhood)$"]["name"];'
+    pois = "".join(f'{t}["{k}"~"^({"|".join(vs)})$"]["wikidata"]["name"]({box});'
+                   for k, vs in by_key.items() for t in ("node", "way"))
+    return (f'[out:json][timeout:12];(node["place"~"^(suburb|quarter|neighbourhood)$"]["name"]({box});'
             f"{pois});out tags center 400;")
 
 
@@ -61,8 +79,11 @@ class OverpassPlaces:
     async def places(self, point: GeoPoint, lang: str) -> PlacesReport:
         errors = []
         for url in self.urls:
+            t0 = time.monotonic()
             try:
                 payload = await self.http.post_json(url, {"data": build_query(point)})
+                log.info("overpass %s: %d elements in %.1fs", httpx.URL(url).host,
+                         len(payload.get("elements") or []), time.monotonic() - t0)
                 break
             except LiveError as exc:
                 errors.append(str(exc))

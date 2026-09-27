@@ -170,7 +170,9 @@ def test_too_few_districts_is_a_provider_error():
     with pytest.raises(LiveError):
         asyncio.run(places.places(POINT, "es"))
     q = build_query(POINT)
-    assert "around:6000,-33.04,-71.62" in q and '["wikidata"]' in q and "out tags center" in q
+    assert "-33.09390,-71.68430,-32.98610,-71.55570" in q  # ~6 km box around the centre
+    assert "around" not in q and "nwr" not in q and "relation" not in q
+    assert '["wikidata"]' in q and "out tags center" in q
 
 
 # --------------------------------------------------------------------------- exchange rates
