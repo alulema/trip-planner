@@ -200,7 +200,7 @@ def test_ttl_cache_expires():
 def test_http_caches_and_maps_errors():
     calls = []
     http = Http(60, transport=transport({"a.test": {"ok": 1}, "b.test": 500,
-                                         "c.test": httpx.ConnectTimeout("slow")}, calls))
+                                         "c.test": httpx.ConnectTimeout("slow")}, calls), retry_delay=0)
     assert asyncio.run(http.get_json("https://a.test/x", {"q": 1})) == {"ok": 1}
     assert asyncio.run(http.get_json("https://a.test/x", {"q": 1})) == {"ok": 1}
     assert len(calls) == 1
@@ -208,6 +208,21 @@ def test_http_caches_and_maps_errors():
         asyncio.run(http.get_json("https://b.test/"))
     with pytest.raises(LiveError, match="timeout"):
         asyncio.run(http.get_json("https://c.test/"))
+
+
+def test_http_retries_once_after_a_stall():
+    calls = []
+
+    def flaky(request):
+        return httpx.ReadTimeout("stall") if len(calls) == 1 else {"ok": 2}
+
+    http = Http(60, transport=transport({"a.test": flaky}, calls), retry_delay=0)
+    assert asyncio.run(http.get_json("https://a.test/")) == {"ok": 2} and len(calls) == 2
+    calls.clear()
+    no_retry = Http(60, transport=transport({"b.test": 404}, calls), retry_delay=0)
+    with pytest.raises(LiveError, match="HTTP 404"):
+        asyncio.run(no_retry.get_json("https://b.test/"))
+    assert len(calls) == 1  # a 4xx is not retried
 
 
 def test_build_live_modes():

@@ -16,6 +16,8 @@ Phase 1 sources (free, no API key):
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import time
 from datetime import date
 from typing import Any, Protocol
@@ -23,6 +25,8 @@ from typing import Any, Protocol
 import httpx
 
 from ..models import FxQuote, GeoPoint, PlacesReport, WeatherReport
+
+log = logging.getLogger("trip_planner.live")
 
 USER_AGENT = "trip-planner-demo/1.0 (+https://github.com/alulema/trip-planner)"
 
@@ -51,7 +55,7 @@ class LiveServices:
     """The providers one chain run uses. `name` is shown in the trace and /api/config."""
 
     def __init__(self, name: str, geocoder: Geocoder, weather: WeatherProvider, places: PlacesProvider,
-                 fx: FxProvider, timeout_seconds: float = 12.0):
+                 fx: FxProvider, timeout_seconds: float = 15.0):
         self.name = name
         self.geocoder = geocoder
         self.weather = weather
@@ -87,13 +91,17 @@ class Http:
     """JSON over HTTP with a per-call timeout, a TTL cache and one error type.
 
     A client is opened per call (a handful of calls per trip), so nothing is bound to an
-    event loop between requests. `transport` lets tests plug in `httpx.MockTransport`."""
+    event loop between requests. A timeout, a connection error or a 5xx is retried once
+    (seen in CI: public APIs occasionally stall on one request and answer the next at
+    once). `transport` lets tests plug in `httpx.MockTransport`."""
 
-    def __init__(self, ttl_seconds: float, timeout_seconds: float = 8.0,
-                 transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, ttl_seconds: float, timeout_seconds: float = 6.0,
+                 transport: httpx.AsyncBaseTransport | None = None, retries: int = 1, retry_delay: float = 0.3):
         self.cache = TTLCache(ttl_seconds)
-        self.timeout = timeout_seconds
+        self.timeout = httpx.Timeout(timeout_seconds, connect=min(3.0, timeout_seconds))
         self.transport = transport
+        self.retries = retries
+        self.retry_delay = retry_delay
 
     async def get_json(self, url: str, params: dict[str, Any] | None = None) -> Any:
         return await self._request("GET", url, params=params)
@@ -106,6 +114,23 @@ class Http:
         cached = self.cache.get(key)
         if cached is not None:
             return cached
+        for attempt in range(self.retries + 1):
+            t0 = time.monotonic()
+            try:
+                payload = await self._once(method, url, **kw)
+            except LiveError as exc:
+                retryable = exc.args[0].startswith(("timeout", "HTTP 5", "Connect", "Read", "Remote"))
+                log.warning("live %s %s failed after %.1fs (attempt %d): %s", method, httpx.URL(url).host,
+                            time.monotonic() - t0, attempt + 1, exc)
+                if attempt < self.retries and retryable:
+                    await asyncio.sleep(self.retry_delay)
+                    continue
+                raise
+            self.cache.put(key, payload)
+            return payload
+        raise AssertionError("unreachable")
+
+    async def _once(self, method: str, url: str, **kw) -> Any:
         try:
             async with httpx.AsyncClient(transport=self.transport, timeout=self.timeout,
                                          headers={"User-Agent": USER_AGENT}) as client:
@@ -118,7 +143,6 @@ class Http:
             raise LiveError(f"HTTP {exc.response.status_code} ({httpx.URL(url).host})") from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise LiveError(f"{type(exc).__name__} ({httpx.URL(url).host})") from exc
-        self.cache.put(key, payload)
         return payload
 
 
@@ -140,6 +164,6 @@ def build_live(mode: str, transport: httpx.AsyncBaseTransport | None = None,
         "open-meteo+osm+ecb",
         geocoder=OpenMeteoGeocoder(Http(24 * 3600, transport=transport)),
         weather=OpenMeteoWeather(Http(3600, transport=transport)),
-        places=OverpassPlaces(Http(24 * 3600, timeout_seconds=12, transport=transport), url=overpass_url),
+        places=OverpassPlaces(Http(24 * 3600, timeout_seconds=12, transport=transport, retries=0), url=overpass_url),
         fx=FxChain(Http(6 * 3600, transport=transport)),
     )

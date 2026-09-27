@@ -220,15 +220,16 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
 
 def report(model: str, ready_s: float, results: list) -> str:
     lines = [f"## Trip Planner E2E — `{model}`", "", f"Model ready after **{ready_s:.0f}s**.", ""]
-    lines += ["| Scenario | Total | 1st summary token | Research | Itinerary | Synthesis | Tokens | Result |",
-              "|---|---|---|---|---|---|---|---|"]
+    lines += ["| Scenario | Total | 1st summary token | Live data | Research | Itinerary | Synthesis | Tokens | Result |",
+              "|---|---|---|---|---|---|---|---|---|"]
     for name, _, m, fails, _warns in results:
         if not m:
-            lines.append(f"| {name} | – | – | – | – | – | – | ❌ {fails[0]} |")
+            lines.append(f"| {name} | – | – | – | – | – | – | – | ❌ {fails[0]} |")
             continue
         d = m["durations_s"]
         verdict = "✅ within budget" if m["within_budget"] else f"⚠️ over budget (${m['total_cost_usd']:,.0f})"
-        lines.append(f"| {name} | {m['elapsed_s']}s | {m['first_token_s']}s | {d.get('destination_research', '–')}s "
+        lines.append(f"| {name} | {m['elapsed_s']}s | {m['first_token_s']}s | {d.get('live_data', '–')}s "
+                     f"| {d.get('destination_research', '–')}s "
                      f"| {d.get('itinerary_planning', '–')}s | {d.get('synthesis', '–')}s | {m['tokens_total']} | {verdict} |")
     for name, _, m, fails, warns in results:
         lines += ["", f"### {name}"]
