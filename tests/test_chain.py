@@ -256,13 +256,33 @@ def test_catalog_free_alternative_is_written_by_code_for_its_own_area():
     asyncio.run(run_chain(ctx))
     days = ctx.itinerary_draft.days
     assert [d.area for d in days] == ["Baixa", "Alfama", "Belém"]
-    assert [d.free_alternative for d in days] == [f"Free walk around {a}" for a in ("Baixa", "Alfama", "Belém")]
+    assert [d.free_alternative for d in days] == [
+        "Free walk around Baixa: Praça do Comércio",
+        "Free walk around Alfama: Miradouro de Santa Luzia",
+        "Free walk around Belém",  # no free-entry highlight there: the generic walk
+    ]
     assert "free_alternatives" in ctx.conflict_resolution.applied_action_ids
     for d in days:  # after the swap, each day still points at its own district
-        assert d.activities[0] == f"Free walk around {d.area}"
+        assert d.activities[0].startswith(f"Free walk around {d.area}")
 
 
 def test_model_path_keeps_the_generated_free_alternative():
     ctx = make_ctx(budget_usd=5000, destination="Valparaíso", lang="en")
     asyncio.run(run_chain(ctx))
     assert ctx.itinerary_draft.days[0].free_alternative.startswith("Free walking route around")
+
+
+def test_narrative_drops_markdown_headings_and_unknown_places():
+    from app.agents.synthesis import _stems, clean_narrative
+
+    known = set().union(*(_stems(t) for t in ["Kyoto", "Higashiyama", "Kiyomizu-dera", "Sannenzaka"]))
+    raw = ("El viaje a Kyoto es una experiencia única. **Día 1 en Higashiyama**\n\n"
+           "Inicia en el Parque Nacional de Higashiyama. Continúa por el Barrio Sannenzaka. "
+           "Luego visita el Museo del Ámbito. Cierra en la Catedral de San José.")
+    assert clean_narrative(raw, known) == "El viaje a Kyoto es una experiencia única. Continúa por el Barrio Sannenzaka."
+
+
+def test_narrative_filter_is_off_without_known_places():
+    from app.agents.synthesis import clean_narrative
+
+    assert clean_narrative("Visita el Museo del Ámbito.") == "Visita el Museo del Ámbito."

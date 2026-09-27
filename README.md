@@ -169,6 +169,7 @@ Stream events: `session`; `trace` (every step transition and every decision); `s
 
 - Costs are approximate references: from the curated catalog for known cities, otherwise estimates from the small model's general knowledge (clamped to sane ranges). There are no live prices, and flights to the destination aren't included.
 - Outside the catalog, a 1.5B model can still pick wrong districts or invent places.
+- The narrative is filtered in code: markdown is stripped, and a sentence is dropped if it talks about money or names a place ("Museum of X", "X Park") that appears nowhere in the plan. The filter is a heuristic, so a wrong detail attached to a known name (for example "Kyoto Central station") can still slip through.
 - CPU inference: about 35–40 s per 3-day trip with the model on 1.75 vCPU (measured in CI with pod-like limits), dominated by the itinerary and the narrative.
 - A 1.5B model occasionally writes rough text or picks odd areas. Pick a larger model if your hardware allows it.
 - The rule-based decision engine understands the keywords in its taxonomy (Spanish and English). Interests outside it map to `other`.

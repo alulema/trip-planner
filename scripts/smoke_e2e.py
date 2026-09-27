@@ -160,7 +160,8 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
     if all(d["estimated_cost_usd"] == 0 for d in draft_days) and not ctx["conflict_resolution"]["triggered"]:
         warnings.append(f"{name}: the model priced every day's activities at $0")
     used, planned, misplaced = highlight_placement(ctx)
-    if planned and used < planned / 2:
+    swapped = "free_alternatives" in ctx["conflict_resolution"].get("applied_action_ids", [])
+    if planned and used < planned / 2 and not swapped:  # the free swap drops paid highlights on purpose
         warnings.append(f"{name}: itinerary mentions only {used}/{planned} planned highlights")
     if misplaced:
         warnings.append(f"{name}: highlights placed in the wrong area: {misplaced}")

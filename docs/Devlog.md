@@ -282,3 +282,22 @@ alternativa gratuita). Latencia 50–63 s con tokens iguales → runner más len
    ignora palabras del nombre de la ciudad/área; excluye del denominador atracciones sin
    palabras distintivas ("Hoàn Kiếm Lake"). Sobre los datos del run anterior: Hanói 2/3,
    Kioto 5/6 (faltó Hanamikoji de verdad), sin falsos positivos.
+
+### E2E run 36293335109 (alternativa por código, idioma, métrica)
+
+Sin atracciones fuera de su barrio en ningún viaje. Kioto 6/6 real (5/6 por traducción
+"Bosque de Arashiyama"), actividades ya en español. Lisboa $50: "Free walk around
+Baixa/Alfama/Belém", cada día en su barrio. Hanói: el día del Barrio Francés metió la catedral
+(que está en Hoàn Kiếm). Latencia 39–45 s. Lo más débil: la **narrativa** (inventa "estación
+Kyoto Central", "Parque Lagoa", usa negritas, mezcla idiomas).
+
+## 2026-09-27 — Sesión 3e: atracciones gratuitas + narrativa revisada por código
+
+1. `cities.json` v2026-09c: `free` por área (152 de 268 imperdibles; criterio conservador:
+   plazas, miradores, calles, parques, mercados, templos/museos de entrada libre). El paseo
+   gratuito del recorte las nombra: "Free walk around Alfama: Miradouro de Santa Luzia".
+2. `clean_narrative`: quita markdown y títulos (líneas sin puntuación final), y descarta frases
+   que nombran un lugar desconocido — sustantivo de lugar ("Parque", "Museo", "Estación"…) +
+   nombre propio cuya raíz no aparece en destino, áreas, imperdibles ni actividades.
+   Heurística: "estación Kyoto Central" pasa porque "Kyoto" es conocido.
+3. E2E: no avisa "pocos imperdibles" si se aplicó el recorte a gratuitos (es a propósito).

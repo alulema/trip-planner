@@ -133,6 +133,7 @@ async def _from_catalog(ctx: SharedContext, city: catalog.City, llm: LLMClient, 
         source="catalog",
         highlights=list(city.highlights),
         area_highlights={a: list(hs) for a, hs in city.area_highlights},
+        area_free={a: list(hs) for a, hs in city.area_free},
     )
     return section, usage
 

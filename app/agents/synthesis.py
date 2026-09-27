@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 
+from .. import catalog
+from ..decisions.rules import normalize
 from ..decisions.taxonomy import ACTIONS_BY_ID
 from ..guardrails import TokenBudget
 from ..llm_client import LLMClient, OnToken
@@ -48,17 +50,64 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
     paragraph = budget_paragraph(ctx)
     if on_token:
         await on_token("\n\n" + paragraph)
-    narrative = clean_narrative(text) or fallback_summary(ctx).split("\n\n")[0]
+    narrative = clean_narrative(text, known_place_stems(ctx)) or fallback_summary(ctx).split("\n\n")[0]
     return build_final(ctx, narrative + "\n\n" + paragraph), usage
 
 
-def clean_narrative(text: str) -> str:
-    """Drop sentences about money and a trailing sentence cut off by the token limit."""
-    sentences = [s for s in re.split(r"(?<=[.!?…])\s+", text.strip()) if s]
-    if len(sentences) > 1 and not re.search(r"[.!?…][\"')»]*$", sentences[-1]):
-        sentences = sentences[:-1]
+def clean_narrative(text: str, known_places: set[str] | None = None) -> str:
+    """Make the model's prose safe to show:
+    * strip markdown the prompt forbids (bold, headings, bullets, code),
+    * drop a trailing sentence cut off by the token limit,
+    * drop sentences about money (the budget paragraph is written by code),
+    * drop sentences naming a place that isn't in the plan ("Parque Nacional de Higashiyama",
+      "Parque Lagoa…"), when the set of known place stems is given."""
+    text = re.sub(r"(\*\*|__|`+)", "", text)
+    text = re.sub(r"(?m)^\s*(#{1,6}\s+|[-*•]\s+)", "", text)
+    # Per line: a trailing piece without final punctuation is a heading ("Día 1 en Gion") or,
+    # on the last line, a sentence cut off by the token limit — drop it either way.
+    sentences = []
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    for i, line in enumerate(lines):
+        parts = [s for s in re.split(r"(?<=[.!?…])\s+", " ".join(line.split())) if s]
+        if parts and not re.search(r"[.!?…][\"')»]*$", parts[-1]) and (len(parts) > 1 or len(lines) > 1):
+            parts = parts[:-1]
+        sentences += parts
     kept = [s for s in sentences if not MONEY.search(s)]
+    if known_places is not None:
+        kept = [s for s in kept if not unknown_places(s, known_places)]
     return " ".join(kept).strip()
+
+
+# A place noun followed by a proper name: "Parque Nacional", "estación Kyoto", "Museo del Ámbito".
+PLACE = re.compile(
+    r"\b(?i:parque|park|estaci[oó]n|station|museo|museum|templo|temple|santuario|shrine|catedral|"
+    r"cathedral|iglesia|church|plaza|square|mercado|market|palacio|palace|laguna|lagoa|lago|lake|"
+    r"puerto|port|calle|street|barrio|district|jard[ií]n|garden|torre|tower|puente|bridge|"
+    r"castillo|castle|playa|beach|monte|mount|mirador|viewpoint)\s+"
+    r"(?:(?i:de|del|of|the|la|el|los|las)\s+){0,2}([A-ZÁÉÍÓÚÑ][\w'’-]+(?:\s+[A-ZÁÉÍÓÚÑ][\w'’-]+){0,2})")
+
+
+def _stems(text: str) -> set[str]:
+    return {w[:5] for w in re.findall(r"[a-z0-9]+", normalize(text)) if len(w) >= 4}
+
+
+def unknown_places(sentence: str, known_places: set[str]) -> list[str]:
+    """Proper names after a place noun whose stem appears nowhere in the plan."""
+    return [name for name in PLACE.findall(sentence)
+            if _stems(name) and not (_stems(name) & known_places)]
+
+
+def known_place_stems(ctx: SharedContext) -> set[str]:
+    req, research, draft = ctx.user_request, ctx.destination_research, ctx.itinerary_draft
+    texts = [req.destination]
+    city = catalog.lookup(req.destination)
+    if city is not None:
+        texts.append(city.name)
+    if research is not None:
+        texts += research.recommended_areas + research.highlights
+    if draft is not None:
+        texts += [a for d in draft.days for a in d.activities]
+    return set().union(*(_stems(t) for t in texts))
 
 
 def build_final(ctx: SharedContext, summary: str) -> FinalItinerary:

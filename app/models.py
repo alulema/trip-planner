@@ -114,6 +114,7 @@ class DestinationResearch(BaseModel):
     highlights: list[str] = Field(default_factory=list)
     # Catalog only: which highlights belong to which area.
     area_highlights: dict[str, list[str]] = Field(default_factory=dict)
+    area_free: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ItineraryDay(BaseModel):

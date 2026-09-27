@@ -25,6 +25,7 @@ def test_catalog_data_is_well_formed():
         for area in c["areas"]:
             assert "(" not in area["name"] and " - " not in area["name"]
             assert 1 <= len(area["highlights"]) <= 3, (c["name"], area["name"])
+            assert set(area["free"]) <= set(area["highlights"]), (c["name"], area["name"])
         highlights = [h for a in c["areas"] for h in a["highlights"]]
         assert len(highlights) == len(set(highlights)), c["name"]  # a place lives in one area only
         assert 20 <= c["lodging_room_night_usd"] <= 400

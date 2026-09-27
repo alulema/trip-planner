@@ -81,9 +81,15 @@ def free_alternative(ctx: SharedContext, area: str, generated: str) -> str:
     """For catalog cities the free fallback is written by code and anchored to the day's area:
     when the budget loop swaps it in, the model can't send every day to the same district
     (seen in a real run: "Explore Alfama's streets" for Baixa, Alfama and Belém)."""
-    if ctx.destination_research is not None and ctx.destination_research.source == "catalog":
-        return f"Paseo libre por {area}" if ctx.user_request.lang == "es" else f"Free walk around {area}"
-    return generated.strip()
+    research = ctx.destination_research
+    if research is None or research.source != "catalog":
+        return generated.strip()
+    es = ctx.user_request.lang == "es"
+    text = f"Paseo libre por {area}" if es else f"Free walk around {area}"
+    free = research.area_free.get(area, [])[:2]
+    if free:  # name the free highlights of that same area, e.g. "…Alfama: Miradouro de Santa Luzia"
+        text += ": " + (" y " if es else " and ").join(free)
+    return text
 
 
 def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDraft:

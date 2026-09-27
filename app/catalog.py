@@ -27,6 +27,8 @@ class City:
     # (area, highlights located in that area) — the pairing is what keeps a small model from
     # placing a landmark in the wrong district.
     area_highlights: tuple[tuple[str, tuple[str, ...]], ...]
+    # Highlights per area with no entrance fee (conservative subset of area_highlights).
+    area_free: tuple[tuple[str, tuple[str, ...]], ...]
     lodging_room_night_usd: float
     meal_usd: float
     transport_day_usd: float
@@ -47,6 +49,7 @@ def _index() -> tuple[dict[str, City], tuple[str, ...]]:
     for c in raw["cities"]:
         city = City(c["name"], c["country"],
                     tuple((a["name"], tuple(a["highlights"])) for a in c["areas"]),
+                    tuple((a["name"], tuple(a.get("free", []))) for a in c["areas"]),
                     c["lodging_room_night_usd"], c["meal_usd"], c["transport_day_usd"])
         for key in (c["name"], *c["aliases"]):
             index[normalize(key)] = city

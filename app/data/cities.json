@@ -2,8 +2,9 @@
  "_meta": {
   "description": "Hand-curated reference data for popular destinations: real districts, well-known highlights and approximate mid-range costs in USD.",
   "costs": "lodging_room_night_usd = mid-range room for up to 2 people; meal_usd = one casual meal for one person; transport_day_usd = local transport for one person per day. Approximate, not live prices.",
-  "version": "2026-09b",
-  "areas": "Each area lists highlights physically located in (or at the edge of) that district, so the itinerary never places a landmark in the wrong area."
+  "version": "2026-09c",
+  "areas": "Each area lists highlights physically located in (or at the edge of) that district, so the itinerary never places a landmark in the wrong area.",
+  "free": "Per area, `free` lists highlights that can be visited without an entrance fee (squares, viewpoints, streets, parks, markets, free-entry temples/museums). Conservative: when in doubt, not listed."
  },
  "cities": [
   {
@@ -18,12 +19,18 @@
      "highlights": [
       "Praça do Comércio",
       "Elevador de Santa Justa"
+     ],
+     "free": [
+      "Praça do Comércio"
      ]
     },
     {
      "name": "Alfama",
      "highlights": [
       "Castelo de São Jorge",
+      "Miradouro de Santa Luzia"
+     ],
+     "free": [
       "Miradouro de Santa Luzia"
      ]
     },
@@ -32,7 +39,8 @@
      "highlights": [
       "Mosteiro dos Jerónimos",
       "Torre de Belém"
-     ]
+     ],
+     "free": []
     }
    ],
    "lodging_room_night_usd": 110,
@@ -51,6 +59,10 @@
      "highlights": [
       "Ponte Dom Luís I",
       "Cais da Ribeira"
+     ],
+     "free": [
+      "Ponte Dom Luís I",
+      "Cais da Ribeira"
      ]
     },
     {
@@ -58,12 +70,16 @@
      "highlights": [
       "Livraria Lello",
       "Torre dos Clérigos"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Vila Nova de Gaia",
      "highlights": [
       "Port wine cellars",
+      "Jardim do Morro"
+     ],
+     "free": [
       "Jardim do Morro"
      ]
     }
@@ -82,6 +98,10 @@
      "highlights": [
       "Puerta del Sol",
       "Plaza Mayor"
+     ],
+     "free": [
+      "Puerta del Sol",
+      "Plaza Mayor"
      ]
     },
     {
@@ -89,12 +109,18 @@
      "highlights": [
       "Palacio Real",
       "Catedral de la Almudena"
+     ],
+     "free": [
+      "Catedral de la Almudena"
      ]
     },
     {
      "name": "Retiro",
      "highlights": [
       "Museo del Prado",
+      "Parque del Retiro"
+     ],
+     "free": [
       "Parque del Retiro"
      ]
     }
@@ -113,6 +139,9 @@
      "highlights": [
       "Catedral de Barcelona",
       "Plaça Reial"
+     ],
+     "free": [
+      "Plaça Reial"
      ]
     },
     {
@@ -120,12 +149,16 @@
      "highlights": [
       "Sagrada Família",
       "Casa Batlló"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Gràcia",
      "highlights": [
       "Park Güell",
+      "Plaça del Sol"
+     ],
+     "free": [
       "Plaça del Sol"
      ]
     }
@@ -146,11 +179,16 @@
      "highlights": [
       "Real Alcázar",
       "Catedral y La Giralda"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Triana",
      "highlights": [
+      "Puente de Triana",
+      "Mercado de Triana"
+     ],
+     "free": [
       "Puente de Triana",
       "Mercado de Triana"
      ]
@@ -158,6 +196,10 @@
     {
      "name": "Parque de María Luisa",
      "highlights": [
+      "Plaza de España",
+      "Parque de María Luisa"
+     ],
+     "free": [
       "Plaza de España",
       "Parque de María Luisa"
      ]
@@ -179,6 +221,9 @@
      "highlights": [
       "Place des Vosges",
       "Musée Picasso"
+     ],
+     "free": [
+      "Place des Vosges"
      ]
     },
     {
@@ -186,11 +231,18 @@
      "highlights": [
       "Musée d'Orsay",
       "Jardin du Luxembourg"
+     ],
+     "free": [
+      "Jardin du Luxembourg"
      ]
     },
     {
      "name": "Montmartre",
      "highlights": [
+      "Sacré-Cœur",
+      "Place du Tertre"
+     ],
+     "free": [
       "Sacré-Cœur",
       "Place du Tertre"
      ]
@@ -212,13 +264,17 @@
      "highlights": [
       "Westminster Abbey",
       "Houses of Parliament"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Bloomsbury",
      "highlights": [
       "British Museum",
       "Charles Dickens Museum"
+     ],
+     "free": [
+      "British Museum"
      ]
     },
     {
@@ -226,6 +282,9 @@
      "highlights": [
       "Tate Modern",
       "London Eye"
+     ],
+     "free": [
+      "Tate Modern"
      ]
     }
    ],
@@ -245,6 +304,9 @@
      "highlights": [
       "Pantheon",
       "Fontana di Trevi"
+     ],
+     "free": [
+      "Fontana di Trevi"
      ]
     },
     {
@@ -252,12 +314,16 @@
      "highlights": [
       "Colosseo",
       "Foro Romano"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Vaticano",
      "highlights": [
       "Musei Vaticani",
+      "Basilica di San Pietro"
+     ],
+     "free": [
       "Basilica di San Pietro"
      ]
     }
@@ -279,6 +345,9 @@
      "highlights": [
       "Duomo di Firenze",
       "Galleria degli Uffizi"
+     ],
+     "free": [
+      "Duomo di Firenze"
      ]
     },
     {
@@ -286,11 +355,16 @@
      "highlights": [
       "Palazzo Pitti",
       "Giardino di Boboli"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "San Niccolò",
      "highlights": [
+      "Piazzale Michelangelo",
+      "San Miniato al Monte"
+     ],
+     "free": [
       "Piazzale Michelangelo",
       "San Miniato al Monte"
      ]
@@ -313,6 +387,9 @@
      "highlights": [
       "Basilica di San Marco",
       "Palazzo Ducale"
+     ],
+     "free": [
+      "Basilica di San Marco"
      ]
     },
     {
@@ -320,13 +397,17 @@
      "highlights": [
       "Gallerie dell'Accademia",
       "Peggy Guggenheim Collection"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "San Polo",
      "highlights": [
       "Mercato di Rialto",
       "Basilica dei Frari"
+     ],
+     "free": [
+      "Mercato di Rialto"
      ]
     }
    ],
@@ -346,12 +427,16 @@
      "highlights": [
       "Rijksmuseum",
       "Van Gogh Museum"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Grachtengordel",
      "highlights": [
       "Anne Frank Huis",
+      "De Negen Straatjes"
+     ],
+     "free": [
       "De Negen Straatjes"
      ]
     },
@@ -360,6 +445,9 @@
      "highlights": [
       "Albert Cuypmarkt",
       "Heineken Experience"
+     ],
+     "free": [
+      "Albert Cuypmarkt"
      ]
     }
    ],
@@ -379,6 +467,9 @@
      "highlights": [
       "Brandenburger Tor",
       "Museumsinsel"
+     ],
+     "free": [
+      "Brandenburger Tor"
      ]
     },
     {
@@ -386,11 +477,19 @@
      "highlights": [
       "Reichstag",
       "Großer Tiergarten"
+     ],
+     "free": [
+      "Reichstag",
+      "Großer Tiergarten"
      ]
     },
     {
      "name": "Friedrichshain",
      "highlights": [
+      "East Side Gallery",
+      "Oberbaumbrücke"
+     ],
+     "free": [
       "East Side Gallery",
       "Oberbaumbrücke"
      ]
@@ -413,6 +512,9 @@
      "highlights": [
       "Staroměstské náměstí",
       "Klementinum"
+     ],
+     "free": [
+      "Staroměstské náměstí"
      ]
     },
     {
@@ -420,12 +522,16 @@
      "highlights": [
       "Pražský hrad",
       "Katedrála svatého Víta"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Malá Strana",
      "highlights": [
       "Kostel svatého Mikuláše",
+      "Petřín"
+     ],
+     "free": [
       "Petřín"
      ]
     }
@@ -447,6 +553,9 @@
      "highlights": [
       "Stephansdom",
       "Hofburg"
+     ],
+     "free": [
+      "Stephansdom"
      ]
     },
     {
@@ -454,12 +563,16 @@
      "highlights": [
       "Schloss Schönbrunn",
       "Tiergarten Schönbrunn"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Landstraße",
      "highlights": [
       "Belvedere",
+      "Hundertwasserhaus"
+     ],
+     "free": [
       "Hundertwasserhaus"
      ]
     }
@@ -478,6 +591,9 @@
      "highlights": [
       "Halászbástya",
       "Mátyás-templom"
+     ],
+     "free": [
+      "Halászbástya"
      ]
     },
     {
@@ -485,12 +601,16 @@
      "highlights": [
       "Országház (Parliament)",
       "Szent István-bazilika"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Városliget",
      "highlights": [
       "Széchenyi fürdő",
+      "Hősök tere"
+     ],
+     "free": [
       "Hősök tere"
      ]
     }
@@ -511,6 +631,9 @@
      "highlights": [
       "Acropolis",
       "Anafiotika"
+     ],
+     "free": [
+      "Anafiotika"
      ]
     },
     {
@@ -518,12 +641,18 @@
      "highlights": [
       "Acropolis Museum",
       "Philopappos Hill"
+     ],
+     "free": [
+      "Philopappos Hill"
      ]
     },
     {
      "name": "Monastiraki",
      "highlights": [
       "Ancient Agora",
+      "Monastiraki flea market"
+     ],
+     "free": [
       "Monastiraki flea market"
      ]
     }
@@ -544,11 +673,18 @@
      "highlights": [
       "Hagia Sophia",
       "Blue Mosque"
+     ],
+     "free": [
+      "Blue Mosque"
      ]
     },
     {
      "name": "Eminönü",
      "highlights": [
+      "Spice Bazaar",
+      "Rüstem Pasha Mosque"
+     ],
+     "free": [
       "Spice Bazaar",
       "Rüstem Pasha Mosque"
      ]
@@ -558,6 +694,9 @@
      "highlights": [
       "İstiklal Caddesi",
       "Galata Tower"
+     ],
+     "free": [
+      "İstiklal Caddesi"
      ]
     }
    ],
@@ -577,6 +716,9 @@
      "highlights": [
       "Trinity College (Book of Kells)",
       "St Stephen's Green"
+     ],
+     "free": [
+      "St Stephen's Green"
      ]
     },
     {
@@ -584,11 +726,16 @@
      "highlights": [
       "Guinness Storehouse",
       "St Patrick's Cathedral"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Temple Bar",
      "highlights": [
+      "Temple Bar",
+      "Ha'penny Bridge"
+     ],
+     "free": [
       "Temple Bar",
       "Ha'penny Bridge"
      ]
@@ -610,11 +757,18 @@
      "highlights": [
       "Edinburgh Castle",
       "Royal Mile"
+     ],
+     "free": [
+      "Royal Mile"
      ]
     },
     {
      "name": "New Town",
      "highlights": [
+      "Princes Street Gardens",
+      "Scottish National Gallery"
+     ],
+     "free": [
       "Princes Street Gardens",
       "Scottish National Gallery"
      ]
@@ -624,6 +778,9 @@
      "highlights": [
       "Arthur's Seat",
       "Palace of Holyroodhouse"
+     ],
+     "free": [
+      "Arthur's Seat"
      ]
     }
    ],
@@ -644,6 +801,9 @@
      "highlights": [
       "Nyhavn",
       "Rosenborg Slot"
+     ],
+     "free": [
+      "Nyhavn"
      ]
     },
     {
@@ -651,12 +811,18 @@
      "highlights": [
       "Christiania",
       "Vor Frelsers Kirke"
+     ],
+     "free": [
+      "Christiania"
      ]
     },
     {
      "name": "Vesterbro",
      "highlights": [
       "Tivoli Gardens",
+      "Kødbyen"
+     ],
+     "free": [
       "Kødbyen"
      ]
     }
@@ -677,11 +843,19 @@
      "highlights": [
       "Senso-ji",
       "Nakamise-dori"
+     ],
+     "free": [
+      "Senso-ji",
+      "Nakamise-dori"
      ]
     },
     {
      "name": "Shibuya",
      "highlights": [
+      "Shibuya Crossing",
+      "Meiji Jingu"
+     ],
+     "free": [
       "Shibuya Crossing",
       "Meiji Jingu"
      ]
@@ -690,6 +864,9 @@
      "name": "Shinjuku",
      "highlights": [
       "Shinjuku Gyoen",
+      "Omoide Yokocho"
+     ],
+     "free": [
       "Omoide Yokocho"
      ]
     }
@@ -710,11 +887,18 @@
      "highlights": [
       "Kiyomizu-dera",
       "Sannenzaka"
+     ],
+     "free": [
+      "Sannenzaka"
      ]
     },
     {
      "name": "Gion",
      "highlights": [
+      "Yasaka Shrine",
+      "Hanamikoji Street"
+     ],
+     "free": [
       "Yasaka Shrine",
       "Hanamikoji Street"
      ]
@@ -724,6 +908,9 @@
      "highlights": [
       "Arashiyama Bamboo Grove",
       "Tenryu-ji"
+     ],
+     "free": [
+      "Arashiyama Bamboo Grove"
      ]
     }
    ],
@@ -741,6 +928,10 @@
      "highlights": [
       "Dotonbori",
       "Kuromon Market"
+     ],
+     "free": [
+      "Dotonbori",
+      "Kuromon Market"
      ]
     },
     {
@@ -748,12 +939,16 @@
      "highlights": [
       "Osaka Castle",
       "Nishinomaru Garden"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Shinsekai",
      "highlights": [
       "Tsutenkaku",
+      "Janjan Yokocho"
+     ],
+     "free": [
       "Janjan Yokocho"
      ]
     }
@@ -774,6 +969,9 @@
      "highlights": [
       "Gyeongbokgung",
       "Bukchon Hanok Village"
+     ],
+     "free": [
+      "Bukchon Hanok Village"
      ]
     },
     {
@@ -781,11 +979,19 @@
      "highlights": [
       "Myeongdong street market",
       "Myeongdong Cathedral"
+     ],
+     "free": [
+      "Myeongdong street market",
+      "Myeongdong Cathedral"
      ]
     },
     {
      "name": "Hongdae",
      "highlights": [
+      "Hongdae street performances",
+      "Gyeongui Line Forest Park"
+     ],
+     "free": [
       "Hongdae street performances",
       "Gyeongui Line Forest Park"
      ]
@@ -805,20 +1011,25 @@
      "highlights": [
       "Grand Palace",
       "Wat Pho"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Thonburi",
      "highlights": [
       "Wat Arun",
       "Thonburi canals"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Yaowarat",
      "highlights": [
       "Yaowarat Road street food",
       "Wat Traimit"
+     ],
+     "free": [
+      "Yaowarat Road street food"
      ]
     }
    ],
@@ -838,6 +1049,9 @@
      "highlights": [
       "Gardens by the Bay",
       "Marina Bay Sands SkyPark"
+     ],
+     "free": [
+      "Gardens by the Bay"
      ]
     },
     {
@@ -845,11 +1059,19 @@
      "highlights": [
       "Maxwell Food Centre",
       "Buddha Tooth Relic Temple"
+     ],
+     "free": [
+      "Maxwell Food Centre",
+      "Buddha Tooth Relic Temple"
      ]
     },
     {
      "name": "Kampong Glam",
      "highlights": [
+      "Sultan Mosque",
+      "Haji Lane"
+     ],
+     "free": [
       "Sultan Mosque",
       "Haji Lane"
      ]
@@ -869,6 +1091,9 @@
      "highlights": [
       "Peak Tram to Victoria Peak",
       "Lan Kwai Fong"
+     ],
+     "free": [
+      "Lan Kwai Fong"
      ]
     },
     {
@@ -876,11 +1101,18 @@
      "highlights": [
       "Star Ferry",
       "Avenue of Stars"
+     ],
+     "free": [
+      "Avenue of Stars"
      ]
     },
     {
      "name": "Mong Kok",
      "highlights": [
+      "Ladies' Market",
+      "Flower Market Road"
+     ],
+     "free": [
       "Ladies' Market",
       "Flower Market Road"
      ]
@@ -903,6 +1135,9 @@
      "highlights": [
       "Hoàn Kiếm Lake",
       "Ngọc Sơn Temple"
+     ],
+     "free": [
+      "Hoàn Kiếm Lake"
      ]
     },
     {
@@ -910,11 +1145,16 @@
      "highlights": [
       "Hanoi Opera House",
       "Vietnamese Women's Museum"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Ba Đình",
      "highlights": [
+      "Hồ Chí Minh Mausoleum",
+      "One Pillar Pagoda"
+     ],
+     "free": [
       "Hồ Chí Minh Mausoleum",
       "One Pillar Pagoda"
      ]
@@ -938,6 +1178,10 @@
      "highlights": [
       "Bến Thành Market",
       "Saigon Notre-Dame Cathedral"
+     ],
+     "free": [
+      "Bến Thành Market",
+      "Saigon Notre-Dame Cathedral"
      ]
     },
     {
@@ -945,11 +1189,18 @@
      "highlights": [
       "War Remnants Museum",
       "Tân Định Church"
+     ],
+     "free": [
+      "Tân Định Church"
      ]
     },
     {
      "name": "Chợ Lớn",
      "highlights": [
+      "Bình Tây Market",
+      "Thiên Hậu Temple"
+     ],
+     "free": [
       "Bình Tây Market",
       "Thiên Hậu Temple"
      ]
@@ -971,11 +1222,18 @@
      "highlights": [
       "Taipei 101",
       "Elephant Mountain"
+     ],
+     "free": [
+      "Elephant Mountain"
      ]
     },
     {
      "name": "Wanhua",
      "highlights": [
+      "Longshan Temple",
+      "Ximending"
+     ],
+     "free": [
       "Longshan Temple",
       "Ximending"
      ]
@@ -985,6 +1243,9 @@
      "highlights": [
       "Shilin Night Market",
       "National Palace Museum"
+     ],
+     "free": [
+      "Shilin Night Market"
      ]
     }
    ],
@@ -1006,6 +1267,9 @@
      "highlights": [
       "Empire State Building",
       "Rockefeller Center"
+     ],
+     "free": [
+      "Rockefeller Center"
      ]
     },
     {
@@ -1013,12 +1277,18 @@
      "highlights": [
       "9/11 Memorial",
       "Statue of Liberty ferry"
+     ],
+     "free": [
+      "9/11 Memorial"
      ]
     },
     {
      "name": "Upper East Side",
      "highlights": [
       "The Metropolitan Museum of Art",
+      "Central Park"
+     ],
+     "free": [
       "Central Park"
      ]
     }
@@ -1037,11 +1307,18 @@
      "highlights": [
       "Pier 39",
       "Alcatraz ferry"
+     ],
+     "free": [
+      "Pier 39"
      ]
     },
     {
      "name": "Presidio",
      "highlights": [
+      "Golden Gate Bridge",
+      "Crissy Field"
+     ],
+     "free": [
       "Golden Gate Bridge",
       "Crissy Field"
      ]
@@ -1050,6 +1327,9 @@
      "name": "Mission District",
      "highlights": [
       "Mission Dolores",
+      "Clarion Alley murals"
+     ],
+     "free": [
       "Clarion Alley murals"
      ]
     }
@@ -1070,11 +1350,18 @@
      "highlights": [
       "Hollywood Walk of Fame",
       "TCL Chinese Theatre"
+     ],
+     "free": [
+      "Hollywood Walk of Fame"
      ]
     },
     {
      "name": "Santa Monica",
      "highlights": [
+      "Santa Monica Pier",
+      "Third Street Promenade"
+     ],
+     "free": [
       "Santa Monica Pier",
       "Third Street Promenade"
      ]
@@ -1084,6 +1371,9 @@
      "highlights": [
       "Grand Central Market",
       "Walt Disney Concert Hall"
+     ],
+     "free": [
+      "Grand Central Market"
      ]
     }
    ],
@@ -1105,12 +1395,18 @@
      "highlights": [
       "Zócalo",
       "Palacio de Bellas Artes"
+     ],
+     "free": [
+      "Zócalo"
      ]
     },
     {
      "name": "Coyoacán",
      "highlights": [
       "Museo Frida Kahlo",
+      "Jardín Centenario"
+     ],
+     "free": [
       "Jardín Centenario"
      ]
     },
@@ -1119,7 +1415,8 @@
      "highlights": [
       "Museo Nacional de Antropología",
       "Castillo de Chapultepec"
-     ]
+     ],
+     "free": []
     }
    ],
    "lodging_room_night_usd": 80,
@@ -1136,11 +1433,18 @@
      "highlights": [
       "Cementerio de la Recoleta",
       "Museo Nacional de Bellas Artes"
+     ],
+     "free": [
+      "Museo Nacional de Bellas Artes"
      ]
     },
     {
      "name": "San Telmo",
      "highlights": [
+      "Feria de San Telmo",
+      "Mercado de San Telmo"
+     ],
+     "free": [
       "Feria de San Telmo",
       "Mercado de San Telmo"
      ]
@@ -1150,6 +1454,9 @@
      "highlights": [
       "Caminito",
       "La Bombonera"
+     ],
+     "free": [
+      "Caminito"
      ]
     }
    ],
@@ -1170,6 +1477,9 @@
      "highlights": [
       "Praia de Copacabana",
       "Forte de Copacabana"
+     ],
+     "free": [
+      "Praia de Copacabana"
      ]
     },
     {
@@ -1177,12 +1487,18 @@
      "highlights": [
       "Pão de Açúcar",
       "Praia Vermelha"
+     ],
+     "free": [
+      "Praia Vermelha"
      ]
     },
     {
      "name": "Cosme Velho",
      "highlights": [
       "Cristo Redentor",
+      "Largo do Boticário"
+     ],
+     "free": [
       "Largo do Boticário"
      ]
     }
@@ -1201,6 +1517,9 @@
      "highlights": [
       "Huaca Pucllana",
       "Malecón de Miraflores"
+     ],
+     "free": [
+      "Malecón de Miraflores"
      ]
     },
     {
@@ -1208,6 +1527,9 @@
      "highlights": [
       "Puente de los Suspiros",
       "MAC Lima"
+     ],
+     "free": [
+      "Puente de los Suspiros"
      ]
     },
     {
@@ -1215,6 +1537,9 @@
      "highlights": [
       "Plaza Mayor",
       "Convento de San Francisco"
+     ],
+     "free": [
+      "Plaza Mayor"
      ]
     }
    ],
@@ -1234,12 +1559,18 @@
      "highlights": [
       "Plaza de Armas",
       "Qorikancha"
+     ],
+     "free": [
+      "Plaza de Armas"
      ]
     },
     {
      "name": "San Blas",
      "highlights": [
       "Iglesia de San Blas",
+      "Mirador de San Blas"
+     ],
+     "free": [
       "Mirador de San Blas"
      ]
     },
@@ -1248,6 +1579,9 @@
      "highlights": [
       "Mercado San Pedro",
       "Iglesia de San Pedro"
+     ],
+     "free": [
+      "Mercado San Pedro"
      ]
     }
    ],
@@ -1267,6 +1601,10 @@
      "highlights": [
       "Museo Botero",
       "Plaza de Bolívar"
+     ],
+     "free": [
+      "Museo Botero",
+      "Plaza de Bolívar"
      ]
     },
     {
@@ -1274,11 +1612,19 @@
      "highlights": [
       "Parque de la 93",
       "Zona G"
+     ],
+     "free": [
+      "Parque de la 93",
+      "Zona G"
      ]
     },
     {
      "name": "Usaquén",
      "highlights": [
+      "Mercado de las Pulgas de Usaquén",
+      "Parque de Usaquén"
+     ],
+     "free": [
       "Mercado de las Pulgas de Usaquén",
       "Parque de Usaquén"
      ]
@@ -1300,11 +1646,19 @@
      "highlights": [
       "Las Murallas",
       "Plaza de Santo Domingo"
+     ],
+     "free": [
+      "Las Murallas",
+      "Plaza de Santo Domingo"
      ]
     },
     {
      "name": "Getsemaní",
      "highlights": [
+      "Plaza de la Trinidad",
+      "Getsemaní street art"
+     ],
+     "free": [
       "Plaza de la Trinidad",
       "Getsemaní street art"
      ]
@@ -1313,7 +1667,8 @@
      "name": "San Lázaro",
      "highlights": [
       "Castillo San Felipe de Barajas"
-     ]
+     ],
+     "free": []
     }
    ],
    "lodging_room_night_usd": 90,
@@ -1330,11 +1685,16 @@
      "highlights": [
       "Basílica del Voto Nacional",
       "Iglesia de la Compañía de Jesús"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "La Mariscal",
      "highlights": [
+      "Plaza Foch",
+      "Mercado Artesanal La Mariscal"
+     ],
+     "free": [
       "Plaza Foch",
       "Mercado Artesanal La Mariscal"
      ]
@@ -1342,6 +1702,10 @@
     {
      "name": "Guápulo",
      "highlights": [
+      "Iglesia de Guápulo",
+      "Mirador de Guápulo"
+     ],
+     "free": [
       "Iglesia de Guápulo",
       "Mirador de Guápulo"
      ]
@@ -1364,6 +1728,10 @@
      "highlights": [
       "Jemaa el-Fnaa",
       "Koutoubia Mosque"
+     ],
+     "free": [
+      "Jemaa el-Fnaa",
+      "Koutoubia Mosque"
      ]
     },
     {
@@ -1371,14 +1739,16 @@
      "highlights": [
       "Jardin Majorelle",
       "Musée Yves Saint Laurent"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Kasbah",
      "highlights": [
       "Saadian Tombs",
       "El Badi Palace"
-     ]
+     ],
+     "free": []
     }
    ],
    "lodging_room_night_usd": 70,
@@ -1397,6 +1767,9 @@
      "highlights": [
       "Table Mountain",
       "Bo-Kaap"
+     ],
+     "free": [
+      "Bo-Kaap"
      ]
     },
     {
@@ -1404,12 +1777,16 @@
      "highlights": [
       "Robben Island ferry",
       "Zeitz MOCAA"
-     ]
+     ],
+     "free": []
     },
     {
      "name": "Newlands",
      "highlights": [
       "Kirstenbosch",
+      "Newlands Forest"
+     ],
+     "free": [
       "Newlands Forest"
      ]
     }
@@ -1430,6 +1807,9 @@
      "highlights": [
       "Burj Khalifa",
       "Dubai Mall"
+     ],
+     "free": [
+      "Dubai Mall"
      ]
     },
     {
@@ -1437,11 +1817,19 @@
      "highlights": [
       "Gold Souk",
       "Spice Souk"
+     ],
+     "free": [
+      "Gold Souk",
+      "Spice Souk"
      ]
     },
     {
      "name": "Dubai Marina",
      "highlights": [
+      "Marina Walk",
+      "JBR Beach"
+     ],
+     "free": [
       "Marina Walk",
       "JBR Beach"
      ]
@@ -1464,6 +1852,10 @@
      "highlights": [
       "Sydney Harbour Bridge",
       "The Rocks Markets"
+     ],
+     "free": [
+      "Sydney Harbour Bridge",
+      "The Rocks Markets"
      ]
     },
     {
@@ -1471,11 +1863,19 @@
      "highlights": [
       "Sydney Opera House",
       "Royal Botanic Garden"
+     ],
+     "free": [
+      "Sydney Opera House",
+      "Royal Botanic Garden"
      ]
     },
     {
      "name": "Bondi",
      "highlights": [
+      "Bondi Beach",
+      "Bondi to Coogee coastal walk"
+     ],
+     "free": [
       "Bondi Beach",
       "Bondi to Coogee coastal walk"
      ]
