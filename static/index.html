@@ -53,7 +53,11 @@
         <span data-i18n="travelers">Viajeros</span>
         <input name="travelers" type="number" min="1" max="8" value="1" required>
       </label>
-      <label class="field wide">
+      <label class="field">
+        <span data-i18n="startDate">Fecha de inicio</span>
+        <input name="start_date" type="date" required>
+      </label>
+      <label class="field wide wider">
         <span data-i18n="interests">Intereses (separados por coma)</span>
         <input name="interests" maxlength="160" value="comida, centro histórico" data-i18n-placeholder="interestsPh">
       </label>
@@ -62,11 +66,12 @@
         <button id="lowball-btn" class="ghost" type="button" data-i18n="lowball"
                 title="">Probar presupuesto irreal ($50)</button>
       </div>
-      <p class="disclaimer" data-i18n="disclaimer">Estimaciones generadas por IA, no tarifas en tiempo real.</p>
+      <p class="disclaimer" data-i18n="disclaimer">Clima, lugares y tipo de cambio en vivo cuando están disponibles; los costos son estimaciones, no tarifas en tiempo real.</p>
     </form>
 
     <ol id="chain" class="chain" aria-label="Agent chain">
       <li data-agent="orchestrator"><span class="dot"></span><span data-i18n="a_orchestrator">Orquestador</span></li>
+      <li data-agent="live_data"><span class="dot"></span><span data-i18n="a_live_data">Datos en vivo</span></li>
       <li data-agent="destination_research"><span class="dot"></span><span data-i18n="a_destination_research">Investigación</span></li>
       <li data-agent="itinerary_planning"><span class="dot"></span><span data-i18n="a_itinerary_planning">Itinerario</span></li>
       <li data-agent="budget"><span class="dot"></span><span data-i18n="a_budget">Presupuesto</span></li>
@@ -94,6 +99,7 @@
         <div id="conflict-box" class="conflict-box" hidden></div>
         <p id="summary" class="summary" hidden></p>
         <ol id="days" class="days"></ol>
+        <div id="sources" class="sources" hidden></div>
         <p id="result-empty" class="placeholder" data-i18n="resultEmpty">El itinerario aparecerá aquí día por día.</p>
       </section>
     </div>

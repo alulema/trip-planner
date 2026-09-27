@@ -1,8 +1,11 @@
 """1. Destination Research Agent — season notes, areas, highlights and reference costs.
 
-For destinations in the curated catalog (app/catalog.py) the facts that must be right — real
-districts, well-known highlights and the cost level — come from the catalog, and the model
-only writes the season notes. Otherwise the model estimates everything (source="model")."""
+Each fact comes from the most reliable source available, and generation is the last resort:
+  * season notes: the real weather for the travel dates (live step, written by code); the
+    model only when there is no weather data;
+  * areas and highlights: the curated catalog (app/catalog.py); OpenStreetMap for cities
+    outside it (source="live"); the model when neither is available (source="model");
+  * reference costs: the catalog; otherwise a model estimate clamped to sane ranges."""
 
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ from ..guardrails import TokenBudget, TokenBudgetExceeded
 from ..llm_client import LLMClient, LLMError, OnProgress
 from ..models import (
     DestinationResearch,
+    CostsOutput,
     DestinationResearchOutput,
     ReferenceCosts,
     SeasonNotesOutput,
@@ -42,6 +46,18 @@ SEASON_SYSTEM = """You are a travel research agent. Reply with JSON only.
 Give season_notes: weather and season advice for visiting the destination in the given month,
 in one short sentence of at most 25 words."""
 
+COSTS_SYSTEM = """You are a travel research agent. Reply with JSON only.
+Estimate for the destination:
+- lodging_per_night_usd: a mid-range room for the whole group, per night.
+- meal_avg_usd: one typical meal for one person.
+- local_transport_day_usd: local transport for one person per day.
+Use THIS destination's cost of living. For reference, lodging ranges from about 25 (very cheap
+countries) to 300 (the most expensive cities), a meal from 3 to 45, and local transport from 2 to 25."""
+
+LIVE_NOTES = {
+    "es": "Zonas y lugares de OpenStreetMap; costos estimados por un modelo de IA local (no tarifas en tiempo real).",
+    "en": "Areas and places from OpenStreetMap; costs estimated by a local AI model (not live prices).",
+}
 AGENT_NOTES = {
     "es": "Estimaciones generales de un modelo de IA local, no tarifas en tiempo real.",
     "en": "General estimates from a local AI model, not live prices.",
@@ -70,17 +86,29 @@ def _bound(value: float, key: str) -> float:
     return round(min(hi, max(lo, value)), 2)
 
 
+def travel_month(ctx: SharedContext) -> str:
+    start = ctx.user_request.start_date
+    return (start or datetime.now(timezone.utc)).strftime("%B")
+
+
+def live_weather_note(ctx: SharedContext) -> str | None:
+    live = ctx.live_data
+    return live.weather.summary if live and live.weather and live.weather.summary else None
+
+
 async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
               on_progress: OnProgress | None = None) -> tuple[DestinationResearch, TokenUsage]:
     req = ctx.user_request
     city = catalog.lookup(req.destination)
     if city is not None:
         return await _from_catalog(ctx, city, llm, budget, on_progress)
+    if ctx.live_data and ctx.live_data.places:
+        return await _from_live_places(ctx, llm, budget, on_progress)
     user = compact({
         "destination": req.destination,
         "days": req.days,
         "group_size": req.travelers,
-        "travel_month": datetime.now(timezone.utc).strftime("%B"),
+        "travel_month": travel_month(ctx),
     }) + "\n" + language_rule(req)
 
     out, usage = await llm.complete_json(
@@ -90,14 +118,46 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
     areas = [clean_area(a) for a in out.recommended_areas]
     areas = list(dict.fromkeys(a for a in areas if a))[:3] or [req.destination]
     section = DestinationResearch(
-        season_notes=out.season_notes.strip(),
+        season_notes=live_weather_note(ctx) or out.season_notes.strip(),
         recommended_areas=areas,
-        reference_costs=ReferenceCosts(
-            lodging_per_night_usd=_bound(out.lodging_per_night_usd, "lodging"),
-            meal_avg_usd=_bound(out.meal_avg_usd, "meal"),
-            local_transport_day_usd=_bound(out.local_transport_day_usd, "transport"),
-        ),
+        reference_costs=_costs(out),
         agent_notes=AGENT_NOTES[req.lang],
+    )
+    return section, usage
+
+
+def _costs(out: CostsOutput | DestinationResearchOutput) -> ReferenceCosts:
+    return ReferenceCosts(
+        lodging_per_night_usd=_bound(out.lodging_per_night_usd, "lodging"),
+        meal_avg_usd=_bound(out.meal_avg_usd, "meal"),
+        local_transport_day_usd=_bound(out.local_transport_day_usd, "transport"),
+    )
+
+
+async def _from_live_places(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
+                            on_progress: OnProgress | None) -> tuple[DestinationResearch, TokenUsage]:
+    """Outside the catalog, with districts and places from OpenStreetMap: the model only
+    estimates the cost level (and nothing else)."""
+    req, places = ctx.user_request, ctx.live_data.places  # type: ignore[union-attr]
+    loc = ctx.live_data.location  # type: ignore[union-attr]
+    user = compact({
+        "destination": f"{loc.name}, {loc.country}" if loc else req.destination,
+        "group_size": req.travelers,
+    })
+    out, usage = await llm.complete_json(
+        agent="destination_research", system=COSTS_SYSTEM, user=user, output_model=CostsOutput,
+        max_tokens=80, budget=budget, on_progress=on_progress,
+        mock=lambda: CostsOutput(**_mock(ctx).model_dump(include=set(CostsOutput.model_fields))),
+    )
+    section = DestinationResearch(
+        season_notes=live_weather_note(ctx) or GENERIC_SEASON[req.lang],
+        recommended_areas=list(places.area_highlights),
+        reference_costs=_costs(out),
+        agent_notes=LIVE_NOTES[req.lang],
+        source="live",
+        highlights=[h for hs in places.area_highlights.values() for h in hs],
+        area_highlights={a: list(hs) for a, hs in places.area_highlights.items()},
+        area_free={a: list(hs) for a, hs in places.area_free.items()},
     )
     return section, usage
 
@@ -105,21 +165,11 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
 async def _from_catalog(ctx: SharedContext, city: catalog.City, llm: LLMClient, budget: TokenBudget,
                         on_progress: OnProgress | None) -> tuple[DestinationResearch, TokenUsage]:
     req = ctx.user_request
-    user = compact({
-        "destination": f"{city.name}, {city.country}",
-        "travel_month": datetime.now(timezone.utc).strftime("%B"),
-    }) + "\n" + language_rule(req)
-    try:
-        out, usage = await llm.complete_json(
-            agent="destination_research", system=SEASON_SYSTEM, user=user, output_model=SeasonNotesOutput,
-            max_tokens=200, budget=budget, on_progress=on_progress,
-            mock=lambda: SeasonNotesOutput(season_notes=_mock(ctx).season_notes),
-        )
-        season = out.season_notes.strip()
-    except (LLMError, TokenBudgetExceeded) as exc:
-        # The catalog facts don't depend on the model: a failed season note must not sink the trip.
-        log.warning("season notes unavailable for %s: %s", city.name, exc)
-        season, usage = GENERIC_SEASON[req.lang], TokenUsage()
+    season = live_weather_note(ctx)
+    if season is not None:
+        usage = TokenUsage()  # real weather for the dates: nothing left for the model to write
+    else:
+        season, usage = await _season_from_model(ctx, city, llm, budget, on_progress)
     rooms = math.ceil(req.travelers / 2)
     section = DestinationResearch(
         season_notes=season,
@@ -136,6 +186,25 @@ async def _from_catalog(ctx: SharedContext, city: catalog.City, llm: LLMClient, 
         area_free={a: list(hs) for a, hs in city.area_free},
     )
     return section, usage
+
+
+async def _season_from_model(ctx: SharedContext, city: catalog.City, llm: LLMClient, budget: TokenBudget,
+                             on_progress: OnProgress | None) -> tuple[str, TokenUsage]:
+    user = compact({
+        "destination": f"{city.name}, {city.country}",
+        "travel_month": travel_month(ctx),
+    }) + "\n" + language_rule(ctx.user_request)
+    try:
+        out, usage = await llm.complete_json(
+            agent="destination_research", system=SEASON_SYSTEM, user=user, output_model=SeasonNotesOutput,
+            max_tokens=200, budget=budget, on_progress=on_progress,
+            mock=lambda: SeasonNotesOutput(season_notes=_mock(ctx).season_notes),
+        )
+        return out.season_notes.strip(), usage
+    except (LLMError, TokenBudgetExceeded) as exc:
+        # The catalog facts don't depend on the model: a failed season note must not sink the trip.
+        log.warning("season notes unavailable for %s: %s", city.name, exc)
+        return GENERIC_SEASON[ctx.user_request.lang], TokenUsage()
 
 
 def _mock(ctx: SharedContext) -> DestinationResearchOutput:

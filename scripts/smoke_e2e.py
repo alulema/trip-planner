@@ -1,7 +1,9 @@
 """End-to-end smoke test against a running stack (app + Ollama with the real model).
 
 Waits for the model to load, plans a few trips over the real SSE endpoint and reports
-latency per agent, tokens, and output-quality signals. Exits non-zero if a run fails.
+latency per agent, tokens, output-quality signals and the live data (real weather, places,
+exchange rates) each trip got. Exits non-zero if a run fails, or if no trip got live weather
+or exchange rates at all (egress or parsing broken — a single flaky provider only warns).
 
     python scripts/smoke_e2e.py --base-url http://localhost:8080
 
@@ -16,21 +18,28 @@ import os
 import re
 import sys
 import time
+from datetime import date, timedelta
 
 import httpx
 
+def _in(days: int) -> str:
+    return (date.today() + timedelta(days=days)).isoformat()
+
+
 SCENARIOS = [
     # name, params, expect_conflict
+    # Within the 16-day forecast window: real forecast, so the model writes no season note.
     ("Presupuesto holgado (es)", {"destination": "Kioto", "days": 3, "budget_usd": 2500, "travelers": 1,
-                                  "interests": "comida,templos", "lang": "es"}, False),
+                                  "interests": "comida,templos", "lang": "es", "start_date": _in(5)}, False),
+    # Beyond the forecast window: the same dates of an earlier year, labelled as a reference.
     ("Unrealistic budget (en)", {"destination": "Lisbon", "days": 3, "budget_usd": 50, "travelers": 2,
-                                 "interests": "wine,museums", "lang": "en"}, True),
+                                 "interests": "wine,museums", "lang": "en", "start_date": _in(45)}, True),
     # A cheap destination: its reference costs should differ from the others.
     ("Destino económico (es)", {"destination": "Hanói", "days": 2, "budget_usd": 400, "travelers": 1,
-                                "interests": "comida callejera,historia", "lang": "es"}, False),
-    # Not in the curated catalog: everything comes from the model.
+                                "interests": "comida callejera,historia", "lang": "es", "start_date": _in(10)}, False),
+    # Not in the curated catalog: districts and places from OpenStreetMap, costs from the model.
     ("Fuera del catálogo (es)", {"destination": "Valparaíso", "days": 2, "budget_usd": 600, "travelers": 1,
-                                 "interests": "arte,miradores", "lang": "es"}, False),
+                                 "interests": "arte,miradores", "lang": "es", "start_date": _in(7)}, False),
 ]
 
 GENERIC = {"market", "mercado", "temple", "templo", "street", "museum", "museo", "cathedral", "catedral",
@@ -139,9 +148,24 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
     empty_days = [d["day"] for d in days if not d["activities"]]
     no_free_alt = [d["day"] for d in ctx["itinerary_draft"]["days"] if not d["free_alternative"]]
 
-    for agent in ("destination_research", "itinerary_planning"):
+    live = ctx.get("live_data") or {}
+    research = ctx["destination_research"]
+    # A catalog city with real weather needs no generation for research; everything else does.
+    generative = ["itinerary_planning"] + ([] if research.get("source") == "catalog" and live.get("weather")
+                                           else ["destination_research"])
+    for agent in generative:
         if tokens.get(agent, 0) <= 0:
             failures.append(f"{name}: {agent} reported no tokens (did the real model run?)")
+    for key, why in (live.get("errors") or {}).items():
+        warnings.append(f"{name}: live {key} unavailable ({why})")
+    weather = live.get("weather")
+    if weather and len(weather["days"]) != params["days"]:
+        warnings.append(f"{name}: weather covers {len(weather['days'])} of {params['days']} days")
+    if weather and weather["kind"] == "forecast" and not all(d.get("weather") for d in final["days"]):
+        warnings.append(f"{name}: forecast not attached to every day")
+    fx = live.get("fx")
+    if fx and not (fx["currency"] == "USD" or (final.get("fx") and final.get("total_local"))):
+        failures.append(f"{name}: exchange rate fetched but the total was not converted")
     if len(days) != params["days"]:
         failures.append(f"{name}: expected {params['days']} days, got {len(days)}")
     if fallback:
@@ -189,6 +213,7 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
         "reference_costs": ctx["destination_research"]["reference_costs"],
         "days": days,
         "summary": final["summary"],
+        "live": live,
     }
     return failures, warnings, metrics
 
@@ -210,6 +235,14 @@ def report(model: str, ready_s: float, results: list) -> str:
         lines += [f"- ❌ {f}" for f in fails] + [f"- ⚠️ {w}" for w in warns]
         if not m:
             continue
+        live = m["live"]
+        loc = live.get("location")
+        lines.append(f"- Live: location {'`' + loc['name'] + ', ' + loc['country'] + '`' if loc else '–'}"
+                     f" · weather {live['weather']['kind'] + ' (' + live['weather']['source']['name'] + ')' if live.get('weather') else '–'}"
+                     f" · places {len(live['places']['area_highlights']) if live.get('places') else '–'}"
+                     f" · fx {('1 USD = ' + str(live['fx']['rate']) + ' ' + live['fx']['currency'] + ' (' + live['fx']['source']['name'] + ')') if live.get('fx') else '–'}")
+        if live.get("weather"):
+            lines.append(f"- Weather note: {live['weather']['summary']}")
         lines += [f"- Data source: **{m['source']}** · highlights used on their day: {m['highlights_used']}"
                   f" · misplaced: {m['misplaced']}",
                   f"- Areas: {', '.join(m['areas'])}",
@@ -246,6 +279,13 @@ def main() -> int:
              if r[2] and r[2]["source"] == "model"]
     if len(costs) > 1 and len(set(costs)) == 1:
         results[-1][4].append("reference costs are identical for every destination (model not estimating)")
+
+    # Systemic live-data failures fail the run; a single flaky provider only warns.
+    ran = [r for r in results if r[2]]
+    if ran and not any(r[2]["live"].get("weather") for r in ran):
+        results[-1][3].append("no trip got live weather (egress to Open-Meteo or parsing broken)")
+    if ran and not any((r[2]["live"].get("fx") or {}).get("currency", "USD") != "USD" for r in ran):
+        results[-1][3].append("no trip got a live exchange rate (egress to Frankfurter/ExchangeRate-API broken)")
 
     md = report(model, ready_s, results)
     print(md)

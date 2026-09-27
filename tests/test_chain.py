@@ -292,13 +292,14 @@ def test_graph_topology():
     from app.orchestrator import GRAPH
 
     g = GRAPH.get_graph()
-    assert set(g.nodes) == {"__start__", "intake", "destination_research", "itinerary_planning", "budget",
+    assert set(g.nodes) == {"__start__", "intake", "live_data", "destination_research", "itinerary_planning", "budget",
                             "conflict_resolution", "revise_itinerary", "synthesis", "finish", "__end__"}
     edges = {(e.source, e.target, e.conditional) for e in g.edges}
     assert ("budget", "conflict_resolution", True) in edges and ("budget", "synthesis", True) in edges
     assert ("conflict_resolution", "revise_itinerary", True) in edges
     assert ("conflict_resolution", "synthesis", True) in edges
     assert ("revise_itinerary", "budget", False) in edges
+    assert ("intake", "live_data", False) in edges and ("live_data", "destination_research", False) in edges
 
 
 def test_exhausted_catalog_routes_straight_to_synthesis():

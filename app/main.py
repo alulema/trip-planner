@@ -24,8 +24,9 @@ from pydantic import ValidationError
 from .config import load_settings
 from .decisions import build_decision_engine
 from .guardrails import Admission, GuardrailError
+from .live import build_live
 from .llm_client import build_llm
-from .models import SharedContext, UserRequest
+from .models import MAX_DAYS_AHEAD, SharedContext, UserRequest
 from .orchestrator import ChainError, Orchestrator, graph_mermaid
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -55,6 +56,7 @@ app.state.admission = Admission(
 )
 app.state.llm = build_llm(settings.llm_mode, settings.ollama_host, settings.ollama_model, settings.mock_latency_ms)
 app.state.engine = build_decision_engine(settings.decision_engine)
+app.state.live = build_live(settings.live_data, overpass_url=settings.overpass_url)
 
 
 @app.get("/", include_in_schema=False)
@@ -76,6 +78,8 @@ async def config() -> dict[str, Any]:
         "model": app.state.llm.model,
         "llm_ready": app.state.llm.ready,
         "decision_engine": app.state.engine.name,
+        "live_data": app.state.live.name if app.state.live else "off",
+        "max_days_ahead": MAX_DAYS_AHEAD,
         "max_days": 7,
         "max_tokens_per_session": settings.max_tokens_per_session,
         "max_conflict_iterations": settings.max_conflict_iterations,
@@ -114,6 +118,7 @@ async def plan_trip_stream(
     travelers: int = Query(1),
     interests: str = Query("", description="Comma-separated"),
     lang: str = Query("es"),
+    start_date: str = Query("", description="YYYY-MM-DD, optional"),
 ) -> StreamingResponse:
     # EventSource can't read error bodies, so every outcome (including validation and
     # guardrail refusals) is delivered as an SSE `error` event.
@@ -125,6 +130,7 @@ async def plan_trip_stream(
             travelers=travelers,
             interests=[i for i in interests.split(",") if i.strip()],
             lang=lang if lang in ("es", "en") else "es",
+            start_date=start_date or None,
         )
     except ValidationError as exc:
         fields = ", ".join(str(e["loc"][0]) for e in exc.errors())
@@ -155,7 +161,8 @@ async def _run_chain(request: Request, user_request: UserRequest) -> AsyncIterat
     ctx = SharedContext(session_id=str(uuid.uuid4()), user_request=user_request)
     queue: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
     orchestrator = Orchestrator(request.app.state.llm, request.app.state.engine,
-                                settings.max_tokens_per_session, settings.max_conflict_iterations)
+                                settings.max_tokens_per_session, settings.max_conflict_iterations,
+                                live=request.app.state.live)
 
     async def emit(event: str, data: dict[str, Any]) -> None:
         await queue.put((event, data))

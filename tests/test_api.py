@@ -46,6 +46,23 @@ def test_stream_happy_path(client):
     assert app.state.admission.active == 0  # released after the stream ends
 
 
+def test_stream_with_travel_dates_carries_live_data(client):
+    from datetime import date, timedelta
+
+    start = (date.today() + timedelta(days=5)).isoformat()
+    events = parse_sse(client.get("/api/plan-trip/stream", params={**PARAMS, "start_date": start}).text)
+    live = next(v["value"] for e, v in events if e == "section" and v["key"] == "live_data")
+    assert live["weather"]["kind"] == "forecast" and live["weather"]["days"][0]["date"] == start
+    final = events[-1][1]["final_itinerary"]
+    assert final["fx"]["currency"] == "JPY" and final["days"][0]["weather"]["date"] == start
+    assert client.get("/api/config").json()["live_data"] == "mock"
+
+
+def test_invalid_start_date_is_an_sse_error(client):
+    events = parse_sse(client.get("/api/plan-trip/stream", params={**PARAMS, "start_date": "2020-01-01"}).text)
+    assert events == [("error", {"code": "invalid_request", "message": "Invalid input: start_date"})]
+
+
 def test_invalid_input_is_an_sse_error(client):
     events = parse_sse(client.get("/api/plan-trip/stream", params={**PARAMS, "days": 30}).text)
     assert events == [("error", {"code": "invalid_request", "message": "Invalid input: days"})]

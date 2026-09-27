@@ -24,6 +24,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 80px; }
 .form { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px 14px; }
 .field { display: flex; flex-direction: column; gap: 4px; grid-column: span 1; font-size: .8rem; color: var(--color-text-muted); }
 .field.wide { grid-column: span 3; }
+.field.wider { grid-column: span 5; }
 .field input {
   font: inherit; font-size: .95rem; color: var(--color-text); background: var(--color-bg);
   border: 1px solid var(--color-border); border-radius: calc(var(--radius) / 1.5); padding: 9px 11px;
@@ -129,3 +130,10 @@ button.ghost:hover { border-color: var(--color-accent); color: var(--color-accen
   .topbar { padding: 12px 16px; }
   .subtitle { display: none; }
 }
+
+/* Live data: per-day weather, local currency, source attribution. */
+.day .wx { margin-left: 6px; font-size: .8rem; color: var(--color-text-muted); }
+.budget-box .fx { margin-top: 6px; font-size: .8rem; color: var(--color-text-muted); }
+.sources { margin-top: 14px; font-size: .75rem; color: var(--color-text-muted); line-height: 1.5; }
+.sources a { color: var(--color-accent); }
+.sources .missing { margin-top: 4px; opacity: .8; }
