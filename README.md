@@ -8,7 +8,7 @@ It implements three patterns from *"30 Agents Every AI Engineer Must Build"* (Im
 
 | Pattern | Where it lives |
 |---|---|
-| **Chain-of-Agents Orchestrator**: one component owns control flow and hand-offs, and does no domain work itself | `app/orchestrator.py` |
+| **Chain-of-Agents Orchestrator**: one component owns control flow and hand-offs, and does no domain work itself | `app/orchestrator.py` (a LangGraph state graph) |
 | **Memory-Augmented Multi-Agent System**: one shared context object that every agent reads and that only grows | `app/models.py` (`SharedContext`) |
 | **Conflict Resolution Mechanism**: detects a broken constraint (budget) and renegotiates, with a hard iteration cap | `app/agents/conflict_resolution.py` + the orchestrator loop |
 
@@ -32,6 +32,18 @@ The **decision engine** (`app/decisions/`) follows the shape of *System-One* typ
 ### Why a curated catalog
 
 The first runs with the real 1.5B model got facts wrong: it put Shibuya (Tokyo) in Kyoto, invented districts and priced Hanoi above Lisbon. Prompts can't fix a small model's missing knowledge, so the facts that have to be right are stored as data. Each district in the catalog lists the highlights that are really located there. Code decides which district each day visits and passes the model only that district's highlights, so a landmark can't end up on the wrong day or in the wrong neighbourhood. The catalog is hand-written, reviewable and covered by tests, and it is matched by name, Spanish and English aliases or a small typo ("Kioto", "Lisboa", "Barcelonna"). The model still writes everything that is prose.
+
+## Orchestration with LangGraph
+
+The chain is a [LangGraph](https://github.com/langchain-ai/langgraph) `StateGraph` whose state is the `SharedContext` itself:
+
+- **Nodes:** `intake`, `destination_research`, `itinerary_planning`, `budget`, `conflict_resolution`, `revise_itinerary`, `synthesis` and `finish`. Each node calls one agent and returns only the section that agent produced.
+- **Reducers:** `trace` and `token_usage` accumulate across nodes, which keeps the shared memory append-only.
+- **Routing:** plain functions decide the next node, with no LLM involved. After `budget`, the chain goes to `conflict_resolution` while it is over budget and iterations are left, and otherwise to `synthesis`. After `conflict_resolution`, it goes to `revise_itinerary` if cuts were chosen, or to `synthesis` if the catalog is exhausted. The loop is `revise_itinerary → budget`.
+- **Live events:** nodes emit trace, section, progress and token events through LangGraph's custom stream, and the app relays them over SSE as they happen.
+- **Per-run dependencies:** the LLM client, the decision engine and the token budget travel in the graph's runtime context, not in the state.
+
+LangGraph is used only for orchestration. The model is still called through the app's own Ollama client, and no LangChain LLM wrappers are involved. `GET /api/graph` returns the diagram LangGraph generates from the compiled graph.
 
 ## Architecture
 
@@ -153,6 +165,7 @@ The script plans four real trips (three catalog cities and one outside the catal
 | `GET /` | Single-page UI. |
 | `GET /api/health` | Liveness: `{"status":"ok","llm_ready":…}`. `llm_ready` turns true once the model is loaded. |
 | `GET /api/config` | Public settings (mode, model, decision engine, limits). |
+| `GET /api/graph` | The agent chain as a Mermaid diagram, generated from the LangGraph graph. |
 | `GET /api/plan-trip/stream?destination=&days=&budget_usd=&travelers=&interests=a,b&lang=es\|en` | SSE stream of the chain. |
 
 Stream events: `session`; `trace` (every step transition and every decision); `section` (`{key, value}` whenever a context section changes); `progress` (`{agent, tokens}` while a structured generation runs); `token` (`{agent, text}`, the synthesis narrative as it streams); and at the end `done` (the full final context) or `error` (`{code, message}`, where `code` is one of `invalid_request`, `rate_limited`, `global_limit`, `busy`, `timeout`, `chain_failed`, `internal`). Every outcome, including validation errors and refusals, arrives as an SSE event. The client must close its `EventSource` after `done` or `error`, because an automatic reconnect would start a new run.

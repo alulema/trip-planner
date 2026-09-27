@@ -301,3 +301,28 @@ Kyoto Central", "Parque Lagoa", usa negritas, mezcla idiomas).
    nombre propio cuya raíz no aparece en destino, áreas, imperdibles ni actividades.
    Heurística: "estación Kyoto Central" pasa porque "Kyoto" es conocido.
 3. E2E: no avisa "pocos imperdibles" si se aplicó el recorte a gratuitos (es a propósito).
+
+---
+
+## 2026-09-27 — Sesión 4: orquestación con LangGraph
+
+**Motivo:** que la demo use un framework reconocible para el post, y obtener el diagrama del
+grafo generado automáticamente.
+
+**Mapeo** (`app/orchestrator.py`, `langgraph==1.2.12`):
+- Estado = `SharedContext` (Pydantic). Reducers: `trace` con `operator.add`, `token_usage` con
+  `add_usage` (suma por agente) → la memoria sigue siendo append-only.
+- Nodos: `intake`, `destination_research`, `itinerary_planning`, `budget`, `conflict_resolution`,
+  `revise_itinerary`, `synthesis`, `finish`. Cada uno devuelve solo su actualización (no muta).
+- Aristas condicionales en código: `after_budget` (sobre presupuesto e iteraciones restantes →
+  conflicto, si no → síntesis) y `after_conflict` (recortes elegidos → revisión, catálogo
+  agotado → síntesis). `ConflictResolution.last_action_ids` pasa los recortes al nodo de revisión.
+- Dependencias por ejecución (LLM, motor, presupuesto de tokens) en el *runtime context*
+  (`context_schema=Deps`), no en el estado.
+- Eventos en vivo: `get_stream_writer()` + `astream(stream_mode=["custom", "values"])`; verificado
+  que llegan durante el nodo (primer token del resumen antes de que termine la síntesis).
+- `Orchestrator.run(ctx, emit)` conserva su interfaz y copia el estado final en `ctx` → `main.py`,
+  UI y los 56 tests existentes pasaron **sin cambios**. Nuevos: topología del grafo, ruta de
+  catálogo agotado, trace final == trace transmitido, endpoint `/api/graph` (60 tests).
+- Solo orquestación: el modelo se sigue llamando con el cliente Ollama propio (sin wrappers de
+  LangChain). Imagen de la app: 203 → 277 MB.

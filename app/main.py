@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
@@ -26,7 +26,7 @@ from .decisions import build_decision_engine
 from .guardrails import Admission, GuardrailError
 from .llm_client import build_llm
 from .models import SharedContext, UserRequest
-from .orchestrator import ChainError, Orchestrator
+from .orchestrator import ChainError, Orchestrator, graph_mermaid
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("trip_planner")
@@ -81,6 +81,12 @@ async def config() -> dict[str, Any]:
         "max_conflict_iterations": settings.max_conflict_iterations,
         "chain_timeout_seconds": settings.chain_timeout_seconds,
     }
+
+
+@app.get("/api/graph", response_class=PlainTextResponse)
+async def graph() -> str:
+    """The agent chain as a Mermaid diagram, generated from the LangGraph graph itself."""
+    return graph_mermaid()
 
 
 def _client_ip(request: Request) -> str:

@@ -81,3 +81,8 @@ def test_hard_timeout_returns_friendly_error(client, monkeypatch):
     events = parse_sse(client.get("/api/plan-trip/stream", params=PARAMS).text)
     assert events[-1][0] == "error" and events[-1][1]["code"] == "timeout"
     assert app.state.admission.active == 0
+
+
+def test_graph_endpoint_returns_mermaid(client):
+    r = client.get("/api/graph")
+    assert r.status_code == 200 and "budget -.-> conflict_resolution" in r.text
