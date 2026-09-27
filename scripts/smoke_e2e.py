@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -24,7 +25,13 @@ SCENARIOS = [
                                   "interests": "comida,templos", "lang": "es"}, False),
     ("Unrealistic budget (en)", {"destination": "Lisbon", "days": 3, "budget_usd": 50, "travelers": 2,
                                  "interests": "wine,museums", "lang": "en"}, True),
+    # A cheap destination: its reference costs should differ from the others.
+    ("Destino económico (es)", {"destination": "Hanói", "days": 2, "budget_usd": 400, "travelers": 1,
+                                "interests": "comida callejera,historia", "lang": "es"}, False),
 ]
+
+CLAIMS_WITHIN = re.compile(r"within (your|the) budget|fits the budget|dentro del presupuesto", re.I)
+CLAIMS_OVER = re.compile(r"over budget|excede el presupuesto", re.I)
 
 
 def wait_ready(client: httpx.Client, timeout_s: int) -> float:
@@ -93,6 +100,17 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
         warnings.append(f"{name}: expected the conflict loop to trigger")
     if len(final["summary"]) < 40:
         warnings.append(f"{name}: very short summary")
+    # Honesty: the summary must never contradict the computed budget verdict.
+    if final["within_budget"] and CLAIMS_OVER.search(final["summary"]):
+        failures.append(f"{name}: summary says over budget but the plan fits")
+    if not final["within_budget"] and CLAIMS_WITHIN.search(final["summary"]):
+        failures.append(f"{name}: summary claims it fits the budget but it is over")
+    draft_days = ctx["itinerary_draft"]["days"]
+    if all(d["estimated_cost_usd"] == 0 for d in draft_days) and not ctx["conflict_resolution"]["triggered"]:
+        warnings.append(f"{name}: the model priced every day's activities at $0")
+    odd_areas = [a for a in ctx["destination_research"]["recommended_areas"] if len(a.split()) > 4]
+    if odd_areas:
+        warnings.append(f"{name}: area names look like descriptions: {odd_areas}")
 
     metrics = {
         "elapsed_s": round(run["elapsed_s"], 1),
@@ -104,6 +122,7 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
         "total_cost_usd": final["total_cost_usd"],
         "conflict": ctx["conflict_resolution"],
         "areas": ctx["destination_research"]["recommended_areas"],
+        "draft_costs": [d["estimated_cost_usd"] for d in ctx["itinerary_draft"]["days"]],
         "reference_costs": ctx["destination_research"]["reference_costs"],
         "days": days,
         "summary": final["summary"],
@@ -130,6 +149,7 @@ def report(model: str, ready_s: float, results: list) -> str:
             continue
         lines += [f"- Areas: {', '.join(m['areas'])}",
                   f"- Reference costs: `{json.dumps(m['reference_costs'])}`",
+                  f"- Activity cost per day (final draft): `{m['draft_costs']}`",
                   f"- Tokens per agent: `{json.dumps(m['tokens'])}`"]
         if m["conflict"]["triggered"]:
             lines.append(f"- Conflict: {m['conflict']['iterations']} iteration(s), "
@@ -156,6 +176,10 @@ def main() -> int:
             fails, warns, metrics = analyze(name, params, expect_conflict, run)
             results.append((name, params, metrics, fails, warns))
             print(f"  {'FAIL' if fails else 'ok'} in {run['elapsed_s']:.1f}s", flush=True)
+
+    costs = [json.dumps(r[2]["reference_costs"], sort_keys=True) for r in results if r[2]]
+    if len(costs) > 1 and len(set(costs)) == 1:
+        results[-1][4].append("reference costs are identical for every destination (model not estimating)")
 
     md = report(model, ready_s, results)
     print(md)

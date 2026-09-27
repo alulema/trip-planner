@@ -8,6 +8,7 @@ assumptions) without generating anything — "generate once, decide many times".
 from __future__ import annotations
 
 from ..decisions.rules import normalize
+from .destination_research import clean_area
 from ..decisions.taxonomy import FOOD_CUT, FREE_ALTERNATIVE_COST_USD, LODGING_CUT, TRANSPORT_CUT
 from ..guardrails import TokenBudget
 from ..llm_client import LLMClient, OnProgress
@@ -26,10 +27,11 @@ SYSTEM = """You are an itinerary planning agent. Reply with JSON only.
 Plan the trip day by day for the traveller's interests, grouping activities by area.
 Rules:
 - One entry per day, numbered from 1, for exactly the requested number of days.
-- area: one of the given areas.
-- activities: 2 or 3 short activities (max 8 words each).
-- estimated_cost_usd: entrance fees and paid activities for the whole group that day
-  (not lodging, not meals, not transport). Use 0 if everything is free.
+- area: one of the given areas, written exactly as given.
+- activities: 2 or 3 short, concrete activities (max 8 words each) in that area.
+- estimated_cost_usd: realistic total for that day's tickets, entrance fees, tours and paid
+  experiences for the whole group (not lodging, meals or transport). Museums, temples, tours
+  and shows usually charge; typical city days cost about 10 to 60 USD per person.
 - free_alternative: one free activity in the same area that could replace the paid ones."""
 
 # Words that suggest an activity costs nothing (kept when paid ones are swapped out).
@@ -73,7 +75,7 @@ def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDra
             src = ItineraryDayOutput(day=n, area=area, activities=[], estimated_cost_usd=0, free_alternative="")
         days.append(ItineraryDay(
             day=n,
-            area=src.area.strip() or req.destination,
+            area=clean_area(src.area) or req.destination,
             activities=[a.strip() for a in src.activities if a.strip()][:4],
             estimated_cost_usd=round(min(max_day_cost, max(0.0, src.estimated_cost_usd)), 2),
             free_alternative=src.free_alternative.strip(),

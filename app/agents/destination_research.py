@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, timezone
 
 from ..guardrails import TokenBudget
@@ -12,12 +13,15 @@ from . import compact, language_rule
 
 SYSTEM = """You are a travel research agent. Reply with JSON only.
 Given a destination, trip length and approximate travel month, return:
-- season_notes: weather/season advice, one short sentence.
-- recommended_areas: 3 real neighbourhoods or zones of the destination.
+- season_notes: weather/season advice for that month, one short sentence.
+- recommended_areas: 3 neighbourhoods or districts INSIDE the destination city itself
+  (not other towns, not single attractions). Name only, no descriptions.
 - lodging_per_night_usd: a mid-range room for the whole group, per night.
 - meal_avg_usd: one typical meal for one person.
 - local_transport_day_usd: local transport for one person per day.
-Use realistic numbers in US dollars."""
+Estimate the costs for THIS destination's cost of living. For reference, lodging ranges from
+about 25 (very cheap countries) to 300 (the most expensive cities), a meal from 3 to 45, and
+local transport from 2 to 25."""
 
 AGENT_NOTES = {
     "es": "Estimaciones generales de un modelo de IA local, no tarifas en tiempo real.",
@@ -26,6 +30,12 @@ AGENT_NOTES = {
 
 # Sanity bounds for numbers coming from a small model (USD).
 LIMITS = {"lodging": (8, 1500), "meal": (1, 150), "transport": (0, 100)}
+
+
+def clean_area(name: str) -> str:
+    """Keep just the place name: small models append descriptions ("Baixa - the historic heart")."""
+    name = re.split(r"\s+[-–—:]\s+|\s*\(|,\s", name.strip(), maxsplit=1)[0]
+    return name.strip(" .\"'")[:40]
 
 
 def _bound(value: float, key: str) -> float:
@@ -47,7 +57,8 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
         agent="destination_research", system=SYSTEM, user=user, output_model=DestinationResearchOutput,
         max_tokens=260, budget=budget, mock=lambda: _mock(ctx), on_progress=on_progress,
     )
-    areas = [a.strip() for a in out.recommended_areas if a.strip()][:3] or [req.destination]
+    areas = [clean_area(a) for a in out.recommended_areas]
+    areas = list(dict.fromkeys(a for a in areas if a))[:3] or [req.destination]
     section = DestinationResearch(
         season_notes=out.season_notes.strip(),
         recommended_areas=areas,

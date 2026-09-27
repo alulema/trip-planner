@@ -136,3 +136,34 @@ def test_llm_failure_in_synthesis_keeps_an_honest_result():
     assert traces(events, "failed")[0]["agent"] == "synthesis"
     assert ctx.final_itinerary.within_budget is False
     assert "excede" in ctx.final_itinerary.summary
+
+
+class LyingNarrativeLLM(MockLLM):
+    """Reproduces what the real 1.5B model did in the first e2e run."""
+
+    async def complete_text(self, *, agent, system, user, max_tokens, budget, mock, on_token=None):
+        assert "$" not in user and "budget" not in user.lower()  # the model never sees numbers
+        text = "You can expect to spend $366, which is within your budget of $50. Day 1 in Baixa is lovely."
+        if on_token:
+            await on_token(text)
+        return text, (await super().complete_text(agent=agent, system=system, user=user, max_tokens=max_tokens,
+                                                  budget=budget, mock=mock))[1]
+
+
+def test_budget_facts_in_the_summary_come_from_code_not_the_model():
+    ctx = make_ctx(budget_usd=50, lang="en")
+    asyncio.run(run_chain(ctx, llm=LyingNarrativeLLM(0)))
+    summary = ctx.final_itinerary.summary
+    assert "within your budget" not in summary and "$366" not in summary
+    assert "Day 1 in Baixa is lovely." in summary
+    assert f"${ctx.final_itinerary.total_cost_usd:,.0f} USD" in summary
+    assert "over budget" in summary
+
+
+def test_clean_area_keeps_only_the_place_name():
+    from app.agents.destination_research import clean_area
+
+    assert clean_area("Baixa - the historic heart of Lisbon") == "Baixa"
+    assert clean_area("Chiado (shopping and nightlife)") == "Chiado"
+    assert clean_area("Gion, Kyoto") == "Gion"
+    assert clean_area("Higashiyama") == "Higashiyama"

@@ -25,7 +25,7 @@ A small model on a CPU produces only a few tokens per second, so the demo spends
 | Conflict resolution | decision + arithmetic | Code computes each preset action's savings; the decision engine scores how much each action would hurt the traveller's interests; code ranks by `savings × (1 − P(harm))` |
 | Itinerary revision | code | Code applies the chosen actions (swaps in the free alternatives, lowers daily costs). **No new generation** |
 | Plan validation | decision | "Does the revised plan still match the interests?", answered as a probability and shown in the trace |
-| Synthesis | **generative** | Qwen writes a short narrative, streamed token by token. If generation isn't possible, a deterministic template writes it instead |
+| Synthesis | **generative** + code | Qwen writes a short narrative, streamed token by token. It never sees any number and must not talk about money. The budget paragraph (total, cuts applied, fits or not) is written by code, so the honest part can't be hallucinated |
 
 The **decision engine** (`app/decisions/`) follows the shape of *System-One* typed-decision models such as TypeSafe's Jev. The caller sends a *state* and a list of typed questions (`choice` with options, or `score` → P(yes)) and gets typed answers with probabilities back, never free text. Each question carries a machine `family` and a natural-language `text`, so engines are interchangeable. The engine that ships is **rule-based** (a keyword taxonomy plus explicit heuristics). It is deterministic, instant and offline. A model-backed engine only needs to implement `evaluate()`.
 
@@ -109,6 +109,15 @@ LLM_MODE=mock uvicorn app.main:app --port 8080     # canned, deterministic agent
 python -m pytest -q                                # offline test suite (uses mock mode)
 ```
 
+### End-to-end check with the real model
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wait   # pod-sized limits
+python scripts/smoke_e2e.py --base-url http://localhost:8080
+```
+
+The script plans three real trips and reports latency per agent, tokens and quality signals. It fails if a run breaks or if the summary contradicts the computed budget verdict. CI runs it on every push.
+
 ## Configuration (environment variables)
 
 | Variable | Default | Purpose |
@@ -155,7 +164,7 @@ Stream events: `session`; `trace` (every step transition and every decision); `s
 ## Limitations
 
 - Costs are **estimates from a small local model's general knowledge**, clamped to sane ranges. There are no live prices, and flights to the destination aren't included.
-- CPU inference is slow. Expect roughly a minute or more per trip on 2 vCPU, dominated by the itinerary generation.
+- CPU inference: about 35–40 s per 3-day trip with the model on 1.75 vCPU (measured in CI with pod-like limits), dominated by the itinerary and the narrative.
 - A 1.5B model occasionally writes rough text or picks odd areas. Pick a larger model if your hardware allows it.
 - The rule-based decision engine understands the keywords in its taxonomy (Spanish and English). Interests outside it map to `other`.
 - Trips are capped at 7 days, with one night of lodging per trip day.

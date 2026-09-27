@@ -166,3 +166,38 @@ solo debe tolerar un corte abrupto (stateless, arranque en ~1 s). Por eso
 - [ ] Cuando haya acceso a Jev: `JevDecisionEngine.evaluate()` + `DECISION_ENGINE=jev`
       (necesita `TYPESAFE_API_KEY` como secreto y salida a la red).
 - [ ] Ampliar catálogo de acciones (p.ej. reducir un día de actividades pagas en vez de todos).
+
+---
+
+## 2026-09-27 — Sesión 3: primer e2e con Qwen real (CI) y correcciones de calidad
+
+### E2E en GitHub Actions (run #1)
+
+Nuevo job `e2e`: construye la imagen ollama con Qwen 2.5 1.5B real, levanta el stack con
+límites de pod (`docker-compose.ci.yml`: ollama 1.75 vCPU / 3 GiB, app 0.25 / 1 GiB) y corre
+`scripts/smoke_e2e.py` (viajes reales por SSE; reporte en el job summary).
+
+Mediciones (3 días): **~37 s por viaje** (research ~8 s, itinerario ~15 s, síntesis ~14 s;
+primer token del resumen ~27–31 s), **~1.2k tokens/viaje** (límite 6000), JSON válido al primer
+intento en todas las llamadas, carga del modelo < 1 s. Muy por debajo del timeout de 180 s.
+
+Problemas de calidad encontrados:
+1. **Síntesis inventó cifras** ("$366, which is within your budget of $50"). Grave: contradice
+   el resultado honesto.
+2. Costo de actividades **siempre $0** (sesgo por "Use 0 if everything is free" en el prompt).
+3. Costos de referencia **idénticos** para Kioto y Lisboa (120/8/5).
+4. "Zonas" que no son barrios (Shirakawa-go para Kioto; "Baixa - the historic heart…").
+
+### Correcciones
+
+1. Síntesis en dos partes: **narrativa** (Qwen, sin ver ningún número, prohibido hablar de
+   dinero; red de seguridad que elimina frases con montos/presupuesto) + **párrafo de
+   presupuesto escrito por código** (total, recortes aplicados, si encaja o no). Mismo principio
+   que "la aritmética es código": la parte factual no puede alucinarse.
+2. Prompt de itinerario: costo realista por día (rangos típicos), sin la frase del 0.
+3. Prompt de research: rangos orientativos por costo de vida; barrios dentro de la ciudad,
+   solo nombre. `clean_area()` recorta descripciones (" - ", paréntesis, comas).
+4. E2E endurecido: **falla** si el resumen contradice el veredicto del presupuesto; warnings si
+   todos los días cuestan $0, si las zonas parecen descripciones o si los costos de referencia
+   son idénticos entre destinos. Tercer escenario (Hanói, destino barato) para ver variación.
+5. Tests nuevos: narrativa "mentirosa" filtrada y párrafo de presupuesto veraz; `clean_area`.

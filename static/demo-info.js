@@ -69,14 +69,14 @@ window.DEMO_INFO = {
     "Negociación acotada y honesta: máximo 2 iteraciones de conflicto; si aun así no alcanza, el resultado lo dice.",
   ],
   limitations: [
-    "CPU inference: roughly a minute or more per trip, mostly the itinerary generation.",
+    "CPU inference: ~35–40 s per 3-day trip, mostly the itinerary and the narrative.",
     "Prices are estimates from a 1.5B model's general knowledge (clamped to sane ranges) — no live flight/hotel data.",
     "Small model: wording or chosen areas are occasionally rough.",
     "Rule-based decisions only understand the keywords of their taxonomy (es/en); anything else maps to 'other'.",
     "Ephemeral: nothing is stored; a session can end at any time.",
   ],
   limitationsEs: [
-    "Inferencia en CPU: aproximadamente un minuto o más por viaje, sobre todo la generación del itinerario.",
+    "Inferencia en CPU: ~35–40 s por viaje de 3 días, sobre todo el itinerario y la narrativa.",
     "Los precios son estimaciones del conocimiento general de un modelo 1.5B (acotadas a rangos sensatos) — sin datos en vivo de vuelos/hoteles.",
     "Modelo pequeño: la redacción o las zonas elegidas a veces son toscas.",
     "Las decisiones por reglas solo entienden las palabras clave de su taxonomía (es/en); lo demás cae en 'other'.",
