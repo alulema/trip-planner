@@ -20,7 +20,7 @@ Una demo pública del patrón **Chain-of-Agents Orchestrator** (cap. 7 de *"30 A
 - qué decisiones toma, con su probabilidad;
 - cuándo aparece un conflicto de presupuesto y cómo se resuelve sin intervención humana.
 
-Todo corre **local y sin APIs externas**: un LLM pequeño (Qwen 2.5 1.5B vía Ollama) más un motor de decisiones no generativo. No hay secretos.
+El razonamiento corre **local**: un LLM pequeño (Qwen 2.5 1.5B vía Ollama) más un motor de decisiones no generativo. Los hechos que cambian (clima de las fechas del viaje, barrios y lugares fuera del catálogo, tipo de cambio) vienen de **fuentes públicas gratuitas y sin API key**, todas opcionales. No hay secretos.
 
 ### Principio de diseño: generar una vez, decidir muchas
 
@@ -29,7 +29,8 @@ Un modelo de 1.5B en CPU produce pocos tokens por segundo y se equivoca en hecho
 | Paso | Mecanismo | Qué hace |
 |---|---|---|
 | Intake | Decisión tipada | Clasifica cada interés en una taxonomía fija (comida, religión/patrimonio, museos…) |
-| Investigación | Catálogo + generativo | Ciudad en catálogo: barrios, atracciones y costos salen de datos curados; Qwen solo escribe la nota de temporada. Fuera del catálogo: Qwen estima todo. |
+| Datos en vivo | APIs públicas, sin LLM | Geocodifica el destino y consulta en paralelo clima (Open-Meteo), lugares (OpenStreetMap, solo fuera del catálogo) y tipo de cambio (BCE) |
+| Investigación | En vivo + catálogo + generativo | La nota de clima la escribe el código con los datos reales. Ciudad en catálogo: barrios, atracciones y costos curados (con clima real, **cero generación**). Fuera del catálogo: barrios y lugares de OpenStreetMap y Qwen solo estima costos; sin OSM, Qwen estima todo. |
 | Itinerario | Generativo, **una sola vez** | El código decide qué barrio visita cada día y con qué atracciones; Qwen redacta las actividades. |
 | Presupuesto | Código | Alojamiento + comida + actividades + transporte, comparado con el presupuesto |
 | Resolución de conflictos | Decisiones + código | El código calcula el ahorro de cada acción preestablecida; el motor puntúa P(daña los intereses); se elige por `ahorro × (1 − P)` |
@@ -42,7 +43,7 @@ Un modelo de 1.5B en CPU produce pocos tokens por segundo y se equivoca en hecho
 `app/orchestrator.py` (`langgraph==1.2.12`) es un `StateGraph` cuyo estado es el propio `SharedContext`:
 
 ```
-START → intake → destination_research → itinerary_planning → budget
+START → intake → live_data → destination_research → itinerary_planning → budget
 budget ──(excede y quedan iteraciones)──▶ conflict_resolution
 budget ──(cabe, o se alcanzó el tope)──▶ synthesis
 conflict_resolution ──(hay recortes)──▶ revise_itinerary → budget
@@ -53,7 +54,7 @@ synthesis → finish → END
 - **Nodos:** un agente por nodo. Cada nodo devuelve **solo su sección** y el grafo la integra.
 - **Reducers:** `trace` (`operator.add`) y `token_usage` (`add_usage`, suma por agente) acumulan. La memoria compartida es append-only.
 - **Ruteo:** `after_budget` y `after_conflict` son funciones de código, no un LLM. El ciclo de conflicto tiene un tope duro de 2 iteraciones (clamp en la config).
-- **Dependencias por ejecución:** el cliente LLM, el motor de decisiones y el presupuesto de tokens viajan en el *runtime context* (`context_schema=Deps`), no en el estado.
+- **Dependencias por ejecución:** el cliente LLM, el motor de decisiones, los proveedores de datos en vivo y el presupuesto de tokens viajan en el *runtime context* (`context_schema=Deps`), no en el estado.
 - **Eventos en vivo:** los nodos emiten `trace`, `section`, `progress` y `token` con el stream `custom` de LangGraph. `Orchestrator.run` los reenvía por SSE a medida que ocurren.
 - **Diagrama:** `GET /api/graph` devuelve el Mermaid que LangGraph genera del grafo compilado.
 - **Alcance:** LangGraph se usa **solo para orquestar**. El modelo se llama con un cliente Ollama propio, sin wrappers de LangChain.
@@ -64,7 +65,9 @@ synthesis → finish → END
 |---|---|
 | `app/orchestrator.py` | Grafo LangGraph, nodos, ruteo, reenvío de eventos |
 | `app/models.py` | `SharedContext` (contrato y estado del grafo), secciones, esquemas de salida del LLM |
-| `app/agents/destination_research.py` | Camino catálogo (solo temporada) y camino modelo (todo); límites a números del modelo; `clean_area` |
+| `app/live/` | Interfaces `Geocoder`, `WeatherProvider`, `PlacesProvider`, `FxProvider`; implementaciones Open-Meteo, Overpass (OSM + Wikidata), Frankfurter/ExchangeRate-API; `Http` con timeout y caché TTL; `mock` |
+| `app/agents/live_data.py` | Paso de datos en vivo: llamadas en paralelo con timeout, errores no fatales, resumen de clima escrito por código |
+| `app/agents/destination_research.py` | Caminos catálogo, OSM (`source="live"`, el modelo solo estima costos) y modelo; nota de clima real o de temporada; límites a números del modelo; `clean_area` |
 | `app/agents/itinerary_planning.py` | `day_plan()` (barrio + atracciones por día), generación única, normalización (impone el barrio), `revise()` por código, alternativa gratuita por código |
 | `app/agents/budget.py` | Aritmética del presupuesto |
 | `app/agents/conflict_resolution.py` | Ahorros por código, daño por decisiones, selección por utilidad |
