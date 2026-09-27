@@ -1,4 +1,8 @@
-"""1. Destination Research Agent (generative) — season notes, areas and reference costs."""
+"""1. Destination Research Agent — season notes, areas, highlights and reference costs.
+
+For destinations in the curated catalog (app/catalog.py) the facts that must be right — real
+districts, well-known highlights and the cost level — come from the catalog, and the model
+only writes the season notes. Otherwise the model estimates everything (source="model")."""
 
 from __future__ import annotations
 
@@ -6,9 +10,17 @@ import math
 import re
 from datetime import datetime, timezone
 
+from .. import catalog
 from ..guardrails import TokenBudget
 from ..llm_client import LLMClient, OnProgress
-from ..models import DestinationResearch, DestinationResearchOutput, ReferenceCosts, SharedContext, TokenUsage
+from ..models import (
+    DestinationResearch,
+    DestinationResearchOutput,
+    ReferenceCosts,
+    SeasonNotesOutput,
+    SharedContext,
+    TokenUsage,
+)
 from . import compact, language_rule
 
 SYSTEM = """You are a travel research agent. Reply with JSON only.
@@ -23,9 +35,17 @@ Estimate the costs for THIS destination's cost of living. For reference, lodging
 about 25 (very cheap countries) to 300 (the most expensive cities), a meal from 3 to 45, and
 local transport from 2 to 25."""
 
+SEASON_SYSTEM = """You are a travel research agent. Reply with JSON only.
+Give season_notes: weather and season advice for visiting the destination in the given month,
+one short sentence."""
+
 AGENT_NOTES = {
     "es": "Estimaciones generales de un modelo de IA local, no tarifas en tiempo real.",
     "en": "General estimates from a local AI model, not live prices.",
+}
+CATALOG_NOTES = {
+    "es": "Zonas y costos de referencia del catálogo curado (aproximados, no tarifas en tiempo real).",
+    "en": "Areas and reference costs from the curated catalog (approximate, not live prices).",
 }
 
 # Sanity bounds for numbers coming from a small model (USD).
@@ -46,6 +66,9 @@ def _bound(value: float, key: str) -> float:
 async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
               on_progress: OnProgress | None = None) -> tuple[DestinationResearch, TokenUsage]:
     req = ctx.user_request
+    city = catalog.lookup(req.destination)
+    if city is not None:
+        return await _from_catalog(ctx, city, llm, budget, on_progress)
     user = compact({
         "destination": req.destination,
         "days": req.days,
@@ -68,6 +91,34 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
             local_transport_day_usd=_bound(out.local_transport_day_usd, "transport"),
         ),
         agent_notes=AGENT_NOTES[req.lang],
+    )
+    return section, usage
+
+
+async def _from_catalog(ctx: SharedContext, city: catalog.City, llm: LLMClient, budget: TokenBudget,
+                        on_progress: OnProgress | None) -> tuple[DestinationResearch, TokenUsage]:
+    req = ctx.user_request
+    user = compact({
+        "destination": f"{city.name}, {city.country}",
+        "travel_month": datetime.now(timezone.utc).strftime("%B"),
+    }) + "\n" + language_rule(req)
+    out, usage = await llm.complete_json(
+        agent="destination_research", system=SEASON_SYSTEM, user=user, output_model=SeasonNotesOutput,
+        max_tokens=90, budget=budget, on_progress=on_progress,
+        mock=lambda: SeasonNotesOutput(season_notes=_mock(ctx).season_notes),
+    )
+    rooms = math.ceil(req.travelers / 2)
+    section = DestinationResearch(
+        season_notes=out.season_notes.strip(),
+        recommended_areas=list(city.areas),
+        reference_costs=ReferenceCosts(
+            lodging_per_night_usd=city.lodging_room_night_usd * rooms,
+            meal_avg_usd=city.meal_usd,
+            local_transport_day_usd=city.transport_day_usd,
+        ),
+        agent_notes=CATALOG_NOTES[req.lang],
+        source="catalog",
+        highlights=list(city.highlights),
     )
     return section, usage
 

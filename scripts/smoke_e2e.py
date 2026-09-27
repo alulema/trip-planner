@@ -28,6 +28,9 @@ SCENARIOS = [
     # A cheap destination: its reference costs should differ from the others.
     ("Destino económico (es)", {"destination": "Hanói", "days": 2, "budget_usd": 400, "travelers": 1,
                                 "interests": "comida callejera,historia", "lang": "es"}, False),
+    # Not in the curated catalog: everything comes from the model.
+    ("Fuera del catálogo (es)", {"destination": "Valparaíso", "days": 2, "budget_usd": 600, "travelers": 1,
+                                 "interests": "arte,miradores", "lang": "es"}, False),
 ]
 
 CLAIMS_WITHIN = re.compile(r"within (your|the) budget|fits the budget|dentro del presupuesto", re.I)
@@ -122,6 +125,7 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
         "total_cost_usd": final["total_cost_usd"],
         "conflict": ctx["conflict_resolution"],
         "areas": ctx["destination_research"]["recommended_areas"],
+        "source": ctx["destination_research"].get("source", "model"),
         "draft_costs": [d["estimated_cost_usd"] for d in ctx["itinerary_draft"]["days"]],
         "reference_costs": ctx["destination_research"]["reference_costs"],
         "days": days,
@@ -147,7 +151,8 @@ def report(model: str, ready_s: float, results: list) -> str:
         lines += [f"- ❌ {f}" for f in fails] + [f"- ⚠️ {w}" for w in warns]
         if not m:
             continue
-        lines += [f"- Areas: {', '.join(m['areas'])}",
+        lines += [f"- Data source: **{m['source']}**",
+                  f"- Areas: {', '.join(m['areas'])}",
                   f"- Reference costs: `{json.dumps(m['reference_costs'])}`",
                   f"- Activity cost per day (final draft): `{m['draft_costs']}`",
                   f"- Tokens per agent: `{json.dumps(m['tokens'])}`"]
@@ -177,7 +182,8 @@ def main() -> int:
             results.append((name, params, metrics, fails, warns))
             print(f"  {'FAIL' if fails else 'ok'} in {run['elapsed_s']:.1f}s", flush=True)
 
-    costs = [json.dumps(r[2]["reference_costs"], sort_keys=True) for r in results if r[2]]
+    costs = [json.dumps(r[2]["reference_costs"], sort_keys=True) for r in results
+             if r[2] and r[2]["source"] == "model"]
     if len(costs) > 1 and len(set(costs)) == 1:
         results[-1][4].append("reference costs are identical for every destination (model not estimating)")
 

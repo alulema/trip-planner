@@ -201,3 +201,26 @@ Problemas de calidad encontrados:
    todos los días cuestan $0, si las zonas parecen descripciones o si los costos de referencia
    son idénticos entre destinos. Tercer escenario (Hanói, destino barato) para ver variación.
 5. Tests nuevos: narrativa "mentirosa" filtrada y párrafo de presupuesto veraz; `clean_area`.
+
+### E2E run #2 (tras las correcciones)
+
+Honestidad resuelta: el párrafo de presupuesto (código) fue correcto en los 3 escenarios; la
+narrativa ya no trae cifras. Costos de actividades no nulos (20/30/40) y costos de referencia
+distintos por destino. Latencia 39–43 s. **Persistían errores de conocimiento del 1.5B:**
+Shibuya (Tokio) como zona de Kioto, barrios inventados en Hanói ("Quốc Hoà"), "Museo del Ámbito"
+inventado, Hanói más caro que Lisboa; y un resumen cortado a media frase (`done=length`).
+
+## 2026-09-27 — Sesión 3b: catálogo curado + benchmark de modelos
+
+1. **Catálogo curado** (`app/data/cities.json`, 45 ciudades): barrios reales (3), imperdibles
+   (4) y nivel de costos (habitación media/noche para ≤2, comida, transporte/día). Match por
+   nombre, alias es/en o typo (difflib ≥0.85). Si hay match: zonas/imperdibles/costos del
+   catálogo, el modelo solo escribe `season_notes` (llamada más corta) y el itinerario se
+   construye alrededor de los imperdibles; `DestinationResearch.source = "catalog"`, visible en
+   trace y UI. Si no: todo del modelo (`source = "model"`). Es la idea de "respuestas
+   preestablecidas" aplicada a hechos: lo que debe ser correcto es dato revisable, no generación.
+2. **Resumen cortado:** `max_tokens` de síntesis 160 → 240 y `clean_narrative` descarta la
+   última frase si quedó sin puntuación final.
+3. **E2E:** 4.º escenario fuera del catálogo (Valparaíso); reporte con la fuente de datos.
+4. **Benchmark aparte** (`.github/workflows/model-benchmark.yml`): mismos viajes con
+   `qwen2.5:1.5b-instruct` vs `qwen2.5:3b-instruct`, límites de pod, en paralelo.

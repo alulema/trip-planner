@@ -19,7 +19,7 @@ A small model on a CPU produces only a few tokens per second, so the demo spends
 | Step | Kind | How |
 |---|---|---|
 | Interest intake | decision | Map each free-text interest to a fixed taxonomy (food, religion/heritage, museums…) |
-| Destination research | **generative** | Qwen writes season notes, areas and reference costs as schema-constrained JSON |
+| Destination research | catalog + **generative** | For ~45 popular cities, real districts, well-known highlights and cost levels come from a curated catalog (`app/data/cities.json`), and Qwen only writes the season notes. For other destinations Qwen estimates everything. The trace shows which source was used |
 | Itinerary planning | **generative, once** | Qwen writes the day-by-day plan, **including a free alternative per day** |
 | Budget | arithmetic | Python adds lodging, food, activities and transport, then compares the total to the budget |
 | Conflict resolution | decision + arithmetic | Code computes each preset action's savings; the decision engine scores how much each action would hurt the traveller's interests; code ranks by `savings × (1 − P(harm))` |
@@ -28,6 +28,10 @@ A small model on a CPU produces only a few tokens per second, so the demo spends
 | Synthesis | **generative** + code | Qwen writes a short narrative, streamed token by token. It never sees any number and must not talk about money. The budget paragraph (total, cuts applied, fits or not) is written by code, so the honest part can't be hallucinated |
 
 The **decision engine** (`app/decisions/`) follows the shape of *System-One* typed-decision models such as TypeSafe's Jev. The caller sends a *state* and a list of typed questions (`choice` with options, or `score` → P(yes)) and gets typed answers with probabilities back, never free text. Each question carries a machine `family` and a natural-language `text`, so engines are interchangeable. The engine that ships is **rule-based** (a keyword taxonomy plus explicit heuristics). It is deterministic, instant and offline. A model-backed engine only needs to implement `evaluate()`.
+
+### Why a curated catalog
+
+The first runs with the real 1.5B model got facts wrong: it put Shibuya (Tokyo) in Kyoto, invented districts and priced Hanoi above Lisbon. Prompts can't fix a small model's missing knowledge, so the facts that have to be right are stored as data. The catalog is hand-written, reviewable and covered by tests, and it is matched by name, Spanish and English aliases or a small typo ("Kioto", "Lisboa", "Barcelonna"). The model still writes everything that is prose.
 
 ## Architecture
 
@@ -116,7 +120,7 @@ docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --wa
 python scripts/smoke_e2e.py --base-url http://localhost:8080
 ```
 
-The script plans three real trips and reports latency per agent, tokens and quality signals. It fails if a run breaks or if the summary contradicts the computed budget verdict. CI runs it on every push.
+The script plans four real trips (three catalog cities and one outside the catalog) and reports latency per agent, tokens and quality signals. It fails if a run breaks or if the summary contradicts the computed budget verdict. CI runs it on every push. The separate `Model benchmark` workflow runs the same trips on `qwen2.5:1.5b-instruct` and `qwen2.5:3b-instruct` side by side.
 
 ## Configuration (environment variables)
 
@@ -163,7 +167,8 @@ Stream events: `session`; `trace` (every step transition and every decision); `s
 
 ## Limitations
 
-- Costs are **estimates from a small local model's general knowledge**, clamped to sane ranges. There are no live prices, and flights to the destination aren't included.
+- Costs are approximate references: from the curated catalog for known cities, otherwise estimates from the small model's general knowledge (clamped to sane ranges). There are no live prices, and flights to the destination aren't included.
+- Outside the catalog, a 1.5B model can still pick wrong districts or invent places.
 - CPU inference: about 35–40 s per 3-day trip with the model on 1.75 vCPU (measured in CI with pod-like limits), dominated by the itinerary and the narrative.
 - A 1.5B model occasionally writes rough text or picks odd areas. Pick a larger model if your hardware allows it.
 - The rule-based decision engine understands the keywords in its taxonomy (Spanish and English). Interests outside it map to `other`.

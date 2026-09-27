@@ -25,6 +25,7 @@
       ev_decision: "decide", generating: "generando…", warming: "cargando modelo…", rules: "reglas",
       q_category: "categoría de", q_harm: "¿afecta los intereses?", q_plan: "¿el plan conserva los intereses?",
       decisionsBy: "decisiones", profile: "Intereses", adjusted: "ajustado",
+      srcCatalog: "datos: catálogo", srcModel: "datos: modelo", highlights: "Imperdibles",
     },
     en: {
       subtitle: "A chain of agents plans your trip, live",
@@ -47,6 +48,7 @@
       ev_decision: "decides", generating: "generating…", warming: "loading model…", rules: "rules",
       q_category: "category of", q_harm: "hurts interests?", q_plan: "plan still matches interests?",
       decisionsBy: "decisions", profile: "Interests", adjusted: "adjusted",
+      srcCatalog: "data: catalog", srcModel: "data: model", highlights: "Highlights",
     },
   };
   const ICON = { decision: "🎯", started: "⏳", completed: "✅", conflict_detected: "⚠️", failed: "❌", skipped: "⏭️", plan_created: "🧭", finished: "🏁" };
@@ -186,8 +188,11 @@
   function renderResearch(r) {
     const box = $("research");
     box.replaceChildren();
-    box.append(el("div", null, `${t("season")}: ${r.season_notes}`));
+    const season = el("div", null, `${t("season")}: ${r.season_notes} `);
+    season.append(el("span", "tag", r.source === "catalog" ? t("srcCatalog") : t("srcModel")));
+    box.append(season);
     box.append(el("div", "areas", `${t("areas")}: ${r.recommended_areas.join(" · ")}`));
+    if (r.highlights && r.highlights.length) box.append(el("div", "areas", `${t("highlights")}: ${r.highlights.join(" · ")}`));
     box.hidden = false;
   }
 

@@ -32,7 +32,8 @@ Rules:
 - estimated_cost_usd: realistic total for that day's tickets, entrance fees, tours and paid
   experiences for the whole group (not lodging, meals or transport). Museums, temples, tours
   and shows usually charge; typical city days cost about 10 to 60 USD per person.
-- free_alternative: one free activity in the same area that could replace the paid ones."""
+- free_alternative: one free activity in the same area that could replace the paid ones.
+If known_highlights are given, build the days around them, using their exact names."""
 
 # Words that suggest an activity costs nothing (kept when paid ones are swapped out).
 FREE_HINTS = ("free", "gratis", "gratuit", "walk", "paseo", "caminar", "stroll", "park", "parque",
@@ -50,6 +51,7 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
         "group_size": req.travelers,
         "interests": req.interests,
         "areas": research.recommended_areas,
+        **({"known_highlights": research.highlights} if research.highlights else {}),
     }) + "\n" + language_rule(req)
 
     out, usage = await llm.complete_json(

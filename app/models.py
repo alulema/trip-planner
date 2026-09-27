@@ -109,6 +109,9 @@ class DestinationResearch(BaseModel):
     recommended_areas: list[str]
     reference_costs: ReferenceCosts
     agent_notes: str
+    # "catalog" = areas, highlights and costs from the curated table; "model" = all from the LLM.
+    source: Literal["catalog", "model"] = "model"
+    highlights: list[str] = Field(default_factory=list)
 
 
 class ItineraryDay(BaseModel):
@@ -219,6 +222,10 @@ class DestinationResearchOutput(BaseModel):
     lodging_per_night_usd: float
     meal_avg_usd: float
     local_transport_day_usd: float
+
+
+class SeasonNotesOutput(BaseModel):
+    season_notes: str
 
 
 class ItineraryDayOutput(BaseModel):

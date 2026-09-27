@@ -13,8 +13,10 @@ from app.orchestrator import ChainError, Orchestrator
 ENGINE = build_decision_engine("rules")
 
 
-def make_ctx(budget_usd=1200, days=5, travelers=1, interests=("food", "temples"), lang="es"):
-    req = UserRequest(destination="Kyoto", days=days, budget_usd=budget_usd, travelers=travelers,
+def make_ctx(budget_usd=1200, days=5, travelers=1, interests=("food", "temples"), lang="es",
+             destination="Testville"):
+    # Default destination is NOT in the catalog, so the numbers below come from the mock model.
+    req = UserRequest(destination=destination, days=days, budget_usd=budget_usd, travelers=travelers,
                       interests=list(interests), lang=lang)
     return SharedContext(session_id="test", user_request=req)
 
@@ -167,3 +169,29 @@ def test_clean_area_keeps_only_the_place_name():
     assert clean_area("Chiado (shopping and nightlife)") == "Chiado"
     assert clean_area("Gion, Kyoto") == "Gion"
     assert clean_area("Higashiyama") == "Higashiyama"
+
+
+def test_catalog_destination_uses_curated_facts_and_the_model_only_for_the_season():
+    ctx = make_ctx(budget_usd=5000, destination="Kioto", travelers=3)
+    events = asyncio.run(run_chain(ctx))
+    r = ctx.destination_research
+    assert r.source == "catalog"
+    assert r.recommended_areas == ["Higashiyama", "Gion", "Arashiyama"]
+    assert "Fushimi Inari Taisha" in r.highlights
+    assert r.reference_costs.lodging_per_night_usd == 240  # 2 rooms for 3 travelers
+    assert any(d.get("message", "").startswith("source: catalog") for d in traces(events, "completed"))
+    assert {d.area for d in ctx.itinerary_draft.days} <= set(r.recommended_areas)
+
+
+def test_unknown_destination_falls_back_to_the_model():
+    ctx = make_ctx(budget_usd=5000, destination="Valparaíso")
+    events = asyncio.run(run_chain(ctx))
+    assert ctx.destination_research.source == "model" and ctx.destination_research.highlights == []
+    assert any(d.get("message") == "source: model (not in catalog)" for d in traces(events, "completed"))
+
+
+def test_truncated_last_sentence_is_dropped():
+    from app.agents.synthesis import clean_narrative
+
+    assert clean_narrative("Visit Gion. Then the market. Also do not forget to") == "Visit Gion. Then the market."
+    assert clean_narrative("A single unfinished sentence") == "A single unfinished sentence"

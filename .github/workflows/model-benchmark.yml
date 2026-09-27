@@ -1,0 +1,46 @@
+name: Model benchmark
+
+# Separate from CI: runs the same real end-to-end trips on different Qwen 2.5 sizes, with the
+# production pod limits, to compare latency and output quality side by side (see each job's
+# summary). Run it manually from the Actions tab; it also runs when this file changes.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/model-benchmark.yml
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ["qwen2.5:1.5b-instruct", "qwen2.5:3b-instruct"]
+    env:
+      OLLAMA_MODEL: ${{ matrix.model }}
+      COMPOSE: docker compose -f docker-compose.yml -f docker-compose.ci.yml
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install httpx==0.28.1
+
+      - name: Build and start app + Ollama (${{ matrix.model }}, pod-sized limits)
+        run: $COMPOSE up -d --build --wait
+
+      - name: Plan real trips over SSE
+        run: python scripts/smoke_e2e.py --base-url http://localhost:8080
+
+      - name: Container logs
+        if: always()
+        run: $COMPOSE logs --no-color --tail=200 app
+
+      - name: Tear down
+        if: always()
+        run: $COMPOSE down

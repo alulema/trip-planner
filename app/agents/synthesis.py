@@ -42,7 +42,7 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
     }) + "\n" + language_rule(req)
 
     text, usage = await llm.complete_text(
-        agent="synthesis", system=SYSTEM, user=user, max_tokens=160, budget=budget,
+        agent="synthesis", system=SYSTEM, user=user, max_tokens=240, budget=budget,
         mock=lambda: _mock_narrative(ctx), on_token=on_token,
     )
     paragraph = budget_paragraph(ctx)
@@ -53,8 +53,11 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
 
 
 def clean_narrative(text: str) -> str:
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    kept = [s for s in sentences if s and not MONEY.search(s)]
+    """Drop sentences about money and a trailing sentence cut off by the token limit."""
+    sentences = [s for s in re.split(r"(?<=[.!?…])\s+", text.strip()) if s]
+    if len(sentences) > 1 and not re.search(r"[.!?…][\"')»]*$", sentences[-1]):
+        sentences = sentences[:-1]
+    kept = [s for s in sentences if not MONEY.search(s)]
     return " ".join(kept).strip()
 
 

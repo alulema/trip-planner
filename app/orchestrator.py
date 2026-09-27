@@ -68,7 +68,8 @@ class Orchestrator:
             total.input_tokens += usage.input_tokens
             total.output_tokens += usage.output_tokens
 
-        async def step(agent: AgentName, call: Callable[[], Awaitable[Any]], label: str | None = None) -> Any:
+        async def step(agent: AgentName, call: Callable[[], Awaitable[Any]], label: str | None = None,
+                       describe: Callable[[Any], str] | None = None) -> Any:
             await trace(agent, "started", message=label)
             t0 = time.perf_counter()
             try:
@@ -77,7 +78,8 @@ class Orchestrator:
                 await trace(agent, "failed", duration_ms=_ms(t0), message=str(exc))
                 raise
             add_usage(agent, usage)
-            await trace(agent, "completed", duration_ms=_ms(t0), tokens=usage.total, message=label)
+            await trace(agent, "completed", duration_ms=_ms(t0), tokens=usage.total,
+                        message=describe(result) if describe else label)
             return result
 
         async def run_budget(label: str | None = None) -> None:
@@ -99,8 +101,11 @@ class Orchestrator:
 
         # 1-2. Mandatory generative steps: without research and a draft there is nothing to show.
         try:
-            ctx.destination_research = await step("destination_research", lambda: destination_research.run(
-                ctx, self.llm, budget, on_progress=progress("destination_research")))
+            ctx.destination_research = await step(
+                "destination_research",
+                lambda: destination_research.run(ctx, self.llm, budget, on_progress=progress("destination_research")),
+                describe=lambda r: ("source: catalog (areas, highlights, costs) + model (season)"
+                                    if r.source == "catalog" else "source: model (not in catalog)"))
             await section("destination_research")
             ctx.itinerary_draft = await step("itinerary_planning", lambda: itinerary_planning.run(
                 ctx, self.llm, budget, on_progress=progress("itinerary_planning")))

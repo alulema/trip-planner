@@ -56,6 +56,7 @@ window.DEMO_INFO = {
     "Un pod efímero, 2 vCPU / 4 GiB, solo CPU, sesgado a la inferencia (Ollama ~1.75 vCPU / 3 GiB). La generación se limita a ~3 llamadas por viaje; el ciclo de conflicto no genera nada. Guardrails: 6.000 tokens por viaje, una cadena a la vez, 10 viajes/hora por visitante, timeout duro de 180 s.",
   design: [
     "Generate once, decide many times: a CPU model writes only what must be written; everything else is a typed decision or arithmetic.",
+    "Facts as data: for ~45 popular cities, real districts, highlights and cost levels come from a curated catalog; the small model only writes prose around them.",
     "Decision engine behind a Jev-style interface (state + typed questions → answers with probabilities); rule-based today, swappable.",
     "Arithmetic is Python, not the model: budget sums and savings can't be hallucinated.",
     "Deterministic orchestrator and append-only shared context: every step is visible, reproducible and cheap.",
@@ -63,6 +64,7 @@ window.DEMO_INFO = {
   ],
   designEs: [
     "Generar una vez, decidir muchas: un modelo en CPU escribe solo lo necesario; todo lo demás es una decisión tipada o aritmética.",
+    "Hechos como datos: para ~45 ciudades populares, barrios reales, imperdibles y nivel de costos vienen de un catálogo curado; el modelo pequeño solo redacta alrededor.",
     "Motor de decisiones detrás de una interfaz estilo Jev (estado + preguntas tipadas → respuestas con probabilidades); hoy por reglas, intercambiable.",
     "La aritmética es Python, no el modelo: sumas y ahorros del presupuesto no pueden alucinarse.",
     "Orquestador determinístico y contexto compartido append-only: cada paso es visible, reproducible y barato.",
@@ -71,14 +73,14 @@ window.DEMO_INFO = {
   limitations: [
     "CPU inference: ~35–40 s per 3-day trip, mostly the itinerary and the narrative.",
     "Prices are estimates from a 1.5B model's general knowledge (clamped to sane ranges) — no live flight/hotel data.",
-    "Small model: wording or chosen areas are occasionally rough.",
+    "Outside the curated catalog, the small model may pick wrong districts or invent places.",
     "Rule-based decisions only understand the keywords of their taxonomy (es/en); anything else maps to 'other'.",
     "Ephemeral: nothing is stored; a session can end at any time.",
   ],
   limitationsEs: [
     "Inferencia en CPU: ~35–40 s por viaje de 3 días, sobre todo el itinerario y la narrativa.",
     "Los precios son estimaciones del conocimiento general de un modelo 1.5B (acotadas a rangos sensatos) — sin datos en vivo de vuelos/hoteles.",
-    "Modelo pequeño: la redacción o las zonas elegidas a veces son toscas.",
+    "Fuera del catálogo curado, el modelo pequeño puede elegir barrios equivocados o inventar lugares.",
     "Las decisiones por reglas solo entienden las palabras clave de su taxonomía (es/en); lo demás cae en 'other'.",
     "Efímero: no se guarda nada; la sesión puede terminar en cualquier momento.",
   ],
