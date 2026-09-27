@@ -48,7 +48,7 @@ The first runs with the real 1.5B model got facts wrong: it put Shibuya (Tokyo) 
 Rules that keep it honest and cheap:
 
 - **Every figure shows its source and fetch time.** The UI lists each source with its attribution; the budget paragraph names the rate, its source and date.
-- **Nothing live is mandatory.** Each call has a timeout and an in-memory TTL cache (weather 1 h, rates 6 h, places and geocoding 24 h). A failure is recorded in `live_data.errors`, shown in the trace, and the chain falls back to the catalog or the model.
+- **Nothing live is mandatory.** Each call has a timeout (3 s to connect, 6 s in total) and one retry on timeouts, connection errors and 5xx; Overpass falls back to a second public instance. Results go to an in-memory TTL cache (weather 1 h, rates 6 h, places and geocoding 24 h). A failure is recorded in `live_data.errors`, shown in the trace, and the chain falls back to the catalog or the model.
 - **The model never restates live numbers.** Temperatures, rain and rates are written into the text by code.
 - **Prices are still estimates.** Lodging, food and activity costs come from the catalog or the model, not from booking APIs.
 
@@ -171,7 +171,7 @@ The script plans four real trips (three catalog cities and one outside the catal
 | `OLLAMA_MODEL` | `qwen2.5:1.5b-instruct` | Model tag. It must exist in the Ollama server. |
 | `DECISION_ENGINE` | `rules` | Engine for typed decisions. `rules` is the only one available today. |
 | `LIVE_DATA` | `on` (`mock` when `LLM_MODE=mock`) | `on` calls the live data sources, `mock` returns canned data, `off` skips the step. |
-| `OVERPASS_URL` | `https://overpass-api.de/api/interpreter` | Overpass API endpoint (point it to your own instance for heavier use). |
+| `OVERPASS_URL` | `overpass-api.de`, then `overpass.private.coffee` | Comma-separated Overpass API endpoints, tried in order (point it to your own instance for heavier use). |
 | `MAX_TOKENS_PER_SESSION` | `6000` | Tokens one trip may consume (prompt + generated, all LLM calls). |
 | `CHAIN_TIMEOUT_SECONDS` | `180` | Hard wall-clock limit for one chain. |
 | `MAX_CONCURRENT_SESSIONS` | `1` | Chains running at once. CPU inference is serialized anyway. |
@@ -204,7 +204,7 @@ Stream events: `session`; `trace` (every step transition and every decision); `s
 
 - The app is **stateless and ephemeral**: nothing is stored between requests, and it tolerates being stopped at any moment. The model is loaded in the background at startup (`llm_ready`), and the first request after a cold start can take longer.
 - It serves plain HTTP on `0.0.0.0:8080` from the root path `/`, with **no TLS and no authentication**. It is designed to run behind a reverse proxy or gateway that terminates TLS and handles authentication. SSE responses set `Cache-Control: no-cache` and `X-Accel-Buffering: no`.
-- The app needs **outbound HTTPS** to `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `overpass-api.de` (or `OVERPASS_URL`), `api.frankfurter.dev` and `open.er-api.com`. Without egress the chain still completes, using the catalog and the model; set `LIVE_DATA=off` to skip the calls entirely.
+- The app needs **outbound HTTPS** to `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `overpass-api.de` and `overpass.private.coffee` (or `OVERPASS_URL`), `api.frankfurter.dev` and `open.er-api.com`. Without egress the chain still completes, using the catalog and the model; set `LIVE_DATA=off` to skip the calls entirely.
 - The Ollama container needs no inbound access except from the app. If both containers share a network namespace (one pod), keep the default `OLLAMA_HOST=http://localhost:11434`.
 - Suggested sizing: about 2 vCPU / 4 GiB in total, biased towards Ollama (for example, Ollama 1.75 vCPU / 3 GiB and the app 0.25 vCPU / 1 GiB).
 - If the client disconnects mid-run, the chain is cancelled so it stops using CPU.

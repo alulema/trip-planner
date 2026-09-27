@@ -151,8 +151,22 @@ def test_places_prefer_a_latin_script_name():
     assert report.area_highlights == {"Gion": ["Santuario Yasaka"], "Higashiyama": ["Kiyomizu-dera"]}
 
 
+def test_busy_overpass_instance_falls_back_to_the_next_one():
+    calls = []
+    places = OverpassPlaces(Http(60, transport=transport(
+        {"overpass-api.de": 504, "overpass.private.coffee": {"elements": ELEMENTS}}, calls), retries=0))
+    report = asyncio.run(places.places(POINT, "es"))
+    assert [c.url.host for c in calls] == ["overpass-api.de", "overpass.private.coffee"]
+    assert "Cerro Alegre" in report.area_highlights
+    down = OverpassPlaces(Http(60, transport=transport({"overpass-api.de": 504, "overpass.private.coffee": 429}),
+                               retries=0))
+    with pytest.raises(LiveError, match="HTTP 504.*HTTP 429"):
+        asyncio.run(down.places(POINT, "es"))
+
+
 def test_too_few_districts_is_a_provider_error():
-    places = OverpassPlaces(Http(60, transport=transport({"overpass-api.de": {"elements": ELEMENTS[:1]}})))
+    places = OverpassPlaces(Http(60, transport=transport({"overpass-api.de": {"elements": ELEMENTS[:1]}})),
+                            urls=("https://overpass-api.de/api/interpreter",))
     with pytest.raises(LiveError):
         asyncio.run(places.places(POINT, "es"))
     q = build_query(POINT)

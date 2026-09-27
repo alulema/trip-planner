@@ -56,7 +56,7 @@ app.state.admission = Admission(
 )
 app.state.llm = build_llm(settings.llm_mode, settings.ollama_host, settings.ollama_model, settings.mock_latency_ms)
 app.state.engine = build_decision_engine(settings.decision_engine)
-app.state.live = build_live(settings.live_data, overpass_url=settings.overpass_url)
+app.state.live = build_live(settings.live_data, overpass_urls=settings.overpass_urls or None)
 
 
 @app.get("/", include_in_schema=False)

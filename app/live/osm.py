@@ -13,7 +13,8 @@ from ..decisions.rules import normalize
 from ..models import GeoPoint, PlacesReport, SourceInfo
 from . import Http, LiveError
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Public instances, tried in order: the main one often answers 504 when it is busy (seen in CI).
+OVERPASS_URLS = ("https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter")
 ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
 
 MAX_AREAS = 3
@@ -53,12 +54,20 @@ def build_query(point: GeoPoint) -> str:
 
 
 class OverpassPlaces:
-    def __init__(self, http: Http, url: str | None = None):
+    def __init__(self, http: Http, urls: tuple[str, ...] | None = None):
         self.http = http
-        self.url = url or OVERPASS_URL
+        self.urls = urls or OVERPASS_URLS
 
     async def places(self, point: GeoPoint, lang: str) -> PlacesReport:
-        payload = await self.http.post_json(self.url, {"data": build_query(point)})
+        errors = []
+        for url in self.urls:
+            try:
+                payload = await self.http.post_json(url, {"data": build_query(point)})
+                break
+            except LiveError as exc:
+                errors.append(str(exc))
+        else:
+            raise LiveError("; ".join(errors))
         report = pair_places(payload.get("elements") or [], point, lang)
         if report is None:
             raise LiveError("not enough districts with notable places")

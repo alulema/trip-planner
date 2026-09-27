@@ -102,7 +102,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 - Timeout duro de 180 s.
 - Cancelación de la cadena si el cliente se desconecta.
 - Tope de 2 iteraciones en el ciclo de conflicto.
-- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total, 12 s para Overpass), un reintento, tope de 15 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
+- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total; 10 s por instancia de Overpass), un reintento (Overpass: segunda instancia pública), tope de 22 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
 
 ### Datos en vivo (fase 1)
 
@@ -125,7 +125,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
   - `trip-planner-ollama` (Ollama 0.12.3 con `qwen2.5:1.5b-instruct` incluido, `:11434`, sin descarga al arrancar).
 - **Pod sugerido** (tope 2 vCPU / 4 GiB): Ollama 1.75 vCPU / 3 GiB y app 0.25 vCPU / 1 GiB. `shareable: false`. Datos completos en `docs/HANDOFF.md`.
 - **Workflow `image.yml`:**
-  - `test`: 90 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
+  - `test`: 91 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
   - `e2e`: Qwen real con los límites del pod, APIs de datos en vivo reales y 4 viajes por SSE (fechas dentro y fuera de la ventana de pronóstico);
   - `image`: publica solo en `main` y solo si pasan `test` y `e2e`.
 - **Workflow `model-benchmark.yml`** (manual): los mismos viajes con 1.5B y 3B en paralelo.
@@ -138,6 +138,17 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 | Lisboa, $50, 2 personas | catálogo | 25–29 s | ~950–990 | 2 rondas de conflicto; paseos gratuitos en su barrio; "excede el presupuesto" correcto |
 | Hanói, $400 | catálogo | 28–35 s | ~1020–1060 | 2/3 (métrica); costos creíbles ($45/noche) |
 | Valparaíso, $600 | modelo | 32–36 s | ~1165–1180 | el modelo inventa barrios (limitación esperada) |
+
+Con datos en vivo (segundo e2e con APIs reales, `431b239`):
+
+| Escenario | Datos en vivo | Paso en vivo | Investigación | Total | Tokens |
+|---|---|---|---|---|---|
+| Kioto, en 5 días | pronóstico real 10–24 °C; 1 USD = 157,59 JPY (BCE) | 0,7 s | 0 tokens | 41,7 s | 1024 |
+| Lisboa, en 45 días | referencia 2025: 14–20 °C, lluvia 3 de 3 días; 1 USD = 0,877 EUR (BCE) | 4,3 s | 0 tokens | 42,1 s | 966 |
+| Hanói, en 10 días | pronóstico 25–30 °C, lluvia 1 de 2 días; 1 USD = 25 952 VND (ExchangeRate-API) | 7,2 s | 0 tokens | 42,3 s | 901 |
+| Valparaíso, en 7 días | pronóstico 11–18 °C; 1 USD = 963 CLP; **OSM: 504 en overpass-api.de** → barrios del modelo | 15,4 s | 333 tokens | 55,6 s | 1090 |
+
+Las tres ciudades del catálogo ya no generan nada en la investigación (antes ~90–140 tokens), y el total de tokens bajó en consecuencia.
 
 La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos tokens). La inferencia domina el tiempo; la orquestación no lo afecta de forma medible.
 
@@ -329,8 +340,9 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
   - el total en moneda local lo calcula y escribe el código, con tasa, fuente y fecha.
 - **Desafío del entorno:** el sandbox de desarrollo no tiene salida a esas APIs (igual que con Qwen, D6). Los proveedores se probaron con respuestas HTTP simuladas y la validación real quedó en el e2e de CI.
 - **Hallazgo del primer e2e real:** Kioto salió completo (pronóstico real 10–24 °C, 1 USD = 157,59 JPY del BCE, investigación con 0 tokens), pero tres peticiones sueltas a Open-Meteo se atascaron hasta el timeout (geocodificación de Lisboa y Valparaíso, pronóstico de Hanói) mientras las siguientes respondían al instante. La cadena cayó correctamente a catálogo/modelo y lo dijo en el trace. Se añadió un reintento (solo para timeouts, errores de conexión y 5xx), timeout de conexión de 3 s y registro de cada fallo con su duración.
+- **Segundo e2e real:** los logs mostraron un patrón claro: la *primera* petición a Open-Meteo de cada viaje se atasca 3 s (timeout de conexión) y el reintento responde al instante. Con el reintento, las cuatro ciudades obtuvieron clima y tipo de cambio reales. Lo único que faltó fue OSM: la instancia pública de Overpass respondió `504 Gateway Timeout` (sobrecarga habitual). Se añadió una segunda instancia pública (`overpass.private.coffee`) como respaldo; `OVERPASS_URL` acepta una lista.
 - **Dónde:** `app/live/`, `app/agents/live_data.py`, `app/agents/destination_research.py`, `app/agents/itinerary_planning.py` (`forecast_days`, marca de lluvia), `app/agents/synthesis.py` (`local_fx`), `static/app.js` (panel de fuentes).
-- **Evidencia:** 27 tests nuevos (25 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
+- **Evidencia:** 28 tests nuevos (26 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
 
 ---
 
@@ -349,7 +361,7 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 | 2026-09-27 | 3e | Atracciones gratuitas, filtro de narrativa (D10, D12) | `4321762`, `9bbd063` |
 | 2026-09-27 | — | **MVP fusionado a `main`** e imágenes publicadas en GHCR | PR #1 → `4c6f232` |
 | 2026-09-27 | 4 | Orquestación con LangGraph (D15) | PR #2 → `223bd7e` |
-| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, OpenStreetMap, tipo de cambio, fecha de viaje (D17) | `213f143`, `431b239` |
+| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, OpenStreetMap, tipo de cambio, fecha de viaje (D17) | `213f143`, `431b239`, instancia Overpass de respaldo |
 
 ---
 

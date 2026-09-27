@@ -10,7 +10,7 @@ Según `docs/DEMO_INTEGRATION.md` → "Lo que entregas a la infra".
 | Imágenes GHCR + puertos | `ghcr.io/alulema/trip-planner:latest` → **8080** (único con ingress interno)<br>`ghcr.io/alulema/trip-planner-ollama:latest` → 11434 (solo intra-pod, Qwen 2.5 1.5B horneado) |
 | `shareable` | `false` recomendado: es stateless, pero la inferencia en CPU se serializa (1 cadena a la vez); compartir el entorno haría esperar/rebotar ("busy") a otros visitantes |
 | Secretos a inyectar | **Ninguno** (LLM local; las fuentes de datos en vivo son públicas y sin API key) |
-| Salida a la red (egress) | El contenedor `app` necesita **HTTPS saliente** a `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `overpass-api.de`, `api.frankfurter.dev` y `open.er-api.com`. Es opcional: sin egress la cadena termina igual (catálogo + modelo, con el motivo en el trace). `LIVE_DATA=off` omite las llamadas. `ollama` no necesita egress |
+| Salida a la red (egress) | El contenedor `app` necesita **HTTPS saliente** a `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `overpass-api.de`, `overpass.private.coffee`, `api.frankfurter.dev` y `open.er-api.com`. Es opcional: sin egress la cadena termina igual (catálogo + modelo, con el motivo en el trace). `LIVE_DATA=off` omite las llamadas. `ollama` no necesita egress |
 | Recursos extra | Sidecar `ollama` en el mismo pod (patrón rag-blogposts). La app usa el default `OLLAMA_HOST=http://localhost:11434` |
 | Sizing sugerido (tope 2 vCPU / 4 GiB) | `ollama` 1.75 vCPU / 3.0 GiB · `app` 0.25 vCPU / 1.0 GiB |
 | Health / startup probe | `GET /api/health` (app lista en ~1–2 s; `llm_ready` pasa a `true` cuando Qwen termina de cargar) |
