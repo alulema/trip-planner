@@ -10,7 +10,7 @@
       travelers: "Viajeros", interests: "Intereses (separados por coma)", interestsPh: "comida, centro histórico",
       plan: "Planificar viaje", planning: "Planificando…", lowball: "Probar presupuesto irreal ($50)",
       disclaimer: "Clima, lugares y tipo de cambio en vivo cuando están disponibles; los costos son estimaciones, no tarifas en tiempo real.",
-      startDate: "Fecha de inicio", a_live_data: "Datos en vivo", srcLive: "datos: OpenStreetMap",
+      startDate: "Fecha de inicio", a_live_data: "Datos en vivo", srcLive: "datos: en vivo", places: "Lugares",
       weather: "Clima", fx: "Tipo de cambio", sources: "Fuentes", fetched: "consultado", liveMissing: "sin datos en vivo",
       forecastTag: "pronóstico real", referenceTag: "referencia histórica",
       trace: "Agent trace", itinerary: "Itinerario",
@@ -36,7 +36,7 @@
       travelers: "Travelers", interests: "Interests (comma separated)", interestsPh: "food, historic center",
       plan: "Plan trip", planning: "Planning…", lowball: "Try an unrealistic budget ($50)",
       disclaimer: "Live weather, places and exchange rate when available; costs are estimates, not live prices.",
-      startDate: "Start date", a_live_data: "Live data", srcLive: "data: OpenStreetMap",
+      startDate: "Start date", a_live_data: "Live data", srcLive: "data: live", places: "Places",
       weather: "Weather", fx: "Exchange rate", sources: "Sources", fetched: "fetched", liveMissing: "no live data",
       forecastTag: "real forecast", referenceTag: "historical reference",
       trace: "Agent trace", itinerary: "Itinerary",
@@ -216,7 +216,8 @@
     const season = el("div", null, `${w ? t("weather") : t("season")}: ${r.season_notes} `);
     if (w) season.append(el("span", "tag", w.kind === "forecast" ? t("forecastTag") : t("referenceTag")));
     const srcTag = { catalog: "srcCatalog", live: "srcLive", model: "srcModel" }[r.source] || "srcModel";
-    season.append(el("span", "tag", t(srcTag)));
+    const liveName = r.source === "live" && live && live.places ? live.places.source.name.split(" (")[0] : null;
+    season.append(el("span", "tag", liveName ? `${t("srcLive").split(":")[0]}: ${liveName}` : t(srcTag)));
     box.append(season);
     box.append(el("div", "areas", `${t("areas")}: ${r.recommended_areas.join(" · ")}`));
     if (r.highlights && r.highlights.length) box.append(el("div", "areas", `${t("highlights")}: ${r.highlights.join(" · ")}`));
@@ -285,7 +286,7 @@
     box.replaceChildren(el("strong", null, `${t("sources")}: `));
     const items = [];
     if (data.weather) items.push([t("weather"), data.weather.source]);
-    if (data.places) items.push(["OpenStreetMap", data.places.source]);
+    if (data.places) items.push([t("places"), data.places.source]);
     if (data.fx && data.fx.currency !== "USD") items.push([t("fx"), data.fx.source]);
     items.forEach(([label, src], i) => {
       const span = el("span", "src");

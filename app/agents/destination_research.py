@@ -3,7 +3,7 @@
 Each fact comes from the most reliable source available, and generation is the last resort:
   * season notes: the real weather for the travel dates (live step, written by code); the
     model only when there is no weather data;
-  * areas and highlights: the curated catalog (app/catalog.py); OpenStreetMap for cities
+  * areas and highlights: the curated catalog (app/catalog.py); Wikidata/OpenStreetMap for cities
     outside it (source="live"); the model when neither is available (source="model");
   * reference costs: the catalog; otherwise a model estimate clamped to sane ranges."""
 
@@ -55,8 +55,8 @@ Use THIS destination's cost of living. For reference, lodging ranges from about 
 countries) to 300 (the most expensive cities), a meal from 3 to 45, and local transport from 2 to 25."""
 
 LIVE_NOTES = {
-    "es": "Zonas y lugares de OpenStreetMap; costos estimados por un modelo de IA local (no tarifas en tiempo real).",
-    "en": "Areas and places from OpenStreetMap; costs estimated by a local AI model (not live prices).",
+    "es": "Zonas y lugares de {source}; costos estimados por un modelo de IA local (no tarifas en tiempo real).",
+    "en": "Areas and places from {source}; costs estimated by a local AI model (not live prices).",
 }
 AGENT_NOTES = {
     "es": "Estimaciones generales de un modelo de IA local, no tarifas en tiempo real.",
@@ -136,7 +136,7 @@ def _costs(out: CostsOutput | DestinationResearchOutput) -> ReferenceCosts:
 
 async def _from_live_places(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
                             on_progress: OnProgress | None) -> tuple[DestinationResearch, TokenUsage]:
-    """Outside the catalog, with districts and places from OpenStreetMap: the model only
+    """Outside the catalog, with districts and places from a live source: the model only
     estimates the cost level (and nothing else)."""
     req, places = ctx.user_request, ctx.live_data.places  # type: ignore[union-attr]
     loc = ctx.live_data.location  # type: ignore[union-attr]
@@ -153,7 +153,7 @@ async def _from_live_places(ctx: SharedContext, llm: LLMClient, budget: TokenBud
         season_notes=live_weather_note(ctx) or GENERIC_SEASON[req.lang],
         recommended_areas=list(places.area_highlights),
         reference_costs=_costs(out),
-        agent_notes=LIVE_NOTES[req.lang],
+        agent_notes=LIVE_NOTES[req.lang].format(source=places.source.name.split(" (")[0]),
         source="live",
         highlights=[h for hs in places.area_highlights.values() for h in hs],
         area_highlights={a: list(hs) for a, hs in places.area_highlights.items()},

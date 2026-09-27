@@ -10,7 +10,7 @@ Según `docs/DEMO_INTEGRATION.md` → "Lo que entregas a la infra".
 | Imágenes GHCR + puertos | `ghcr.io/alulema/trip-planner:latest` → **8080** (único con ingress interno)<br>`ghcr.io/alulema/trip-planner-ollama:latest` → 11434 (solo intra-pod, Qwen 2.5 1.5B horneado) |
 | `shareable` | `false` recomendado: es stateless, pero la inferencia en CPU se serializa (1 cadena a la vez); compartir el entorno haría esperar/rebotar ("busy") a otros visitantes |
 | Secretos a inyectar | **Ninguno** (LLM local; las fuentes de datos en vivo son públicas y sin API key) |
-| Salida a la red (egress) | El contenedor `app` necesita **HTTPS saliente** a `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `overpass-api.de`, `overpass.private.coffee`, `api.frankfurter.dev` y `open.er-api.com`. Es opcional: sin egress la cadena termina igual (catálogo + modelo, con el motivo en el trace). `LIVE_DATA=off` omite las llamadas. `ollama` no necesita egress |
+| Salida a la red (egress) | El contenedor `app` necesita **HTTPS saliente** a `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `query.wikidata.org`, `overpass-api.de`, `api.frankfurter.dev` y `open.er-api.com`. Es opcional: sin egress la cadena termina igual (catálogo + modelo, con el motivo en el trace). `LIVE_DATA=off` omite las llamadas. `ollama` no necesita egress |
 | Recursos extra | Sidecar `ollama` en el mismo pod (patrón rag-blogposts). La app usa el default `OLLAMA_HOST=http://localhost:11434` |
 | Sizing sugerido (tope 2 vCPU / 4 GiB) | `ollama` 1.75 vCPU / 3.0 GiB · `app` 0.25 vCPU / 1.0 GiB |
 | Health / startup probe | `GET /api/health` (app lista en ~1–2 s; `llm_ready` pasa a `true` cuando Qwen termina de cargar) |
@@ -22,7 +22,7 @@ Notas:
 - Rate limit por IP: la app usa `CF-Connecting-IP` (lo fija Cloudflare) y, si falta, el primer valor de `X-Forwarded-For`.
 - Variable opcional `OLLAMA_MODEL` si se cambia el modelo horneado (p.ej. `qwen2.5:0.5b-instruct`
   para más velocidad; requiere rebuild de la imagen ollama con `--build-arg OLLAMA_MODEL=...`).
-- Datos en vivo: clima (Open-Meteo, CC BY 4.0, uso no comercial), lugares (OpenStreetMap, ODbL) y tipo de
+- Datos en vivo: clima (Open-Meteo, CC BY 4.0, uso no comercial), lugares (Wikidata, CC0; OpenStreetMap, ODbL, de respaldo) y tipo de
   cambio (BCE vía Frankfurter; ExchangeRate-API de respaldo). La UI muestra la atribución de cada fuente.
   Timeouts de 8–12 s por llamada y caché en memoria; los rate limits de la app mantienen el uso muy bajo.
 - Cold start: la imagen ollama pesa ~2–3 GB; presupuestar el pull en la provisión.

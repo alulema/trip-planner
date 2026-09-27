@@ -83,7 +83,7 @@ def describe(data: LiveData) -> str:
     if data.weather:
         parts.append(f"weather: {data.weather.kind} ({data.weather.source.name})")
     if data.places:
-        parts.append(f"places: {len(data.places.area_highlights)} areas (OpenStreetMap)")
+        parts.append(f"places: {len(data.places.area_highlights)} areas ({data.places.source.name})")
     if data.fx:
         parts.append(f"fx: 1 USD = {data.fx.rate:,.4g} {data.fx.currency}"
                      + (f" ({data.fx.source.name})" if data.fx.currency != "USD" else ""))

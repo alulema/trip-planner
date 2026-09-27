@@ -158,7 +158,7 @@ class WeatherReport(BaseModel):
 
 
 class PlacesReport(BaseModel):
-    """Areas and notable places around the destination, from OpenStreetMap."""
+    """Areas and notable places around the destination (Wikidata, or OpenStreetMap)."""
 
     area_highlights: dict[str, list[str]]
     area_free: dict[str, list[str]] = Field(default_factory=dict)
@@ -198,7 +198,7 @@ class DestinationResearch(BaseModel):
     reference_costs: ReferenceCosts
     agent_notes: str
     # "catalog" = areas, highlights and costs from the curated table; "live" = areas and
-    # highlights from OpenStreetMap, costs from the model; "model" = all from the LLM.
+    # highlights from Wikidata/OpenStreetMap, costs from the model; "model" = all from the LLM.
     source: Literal["catalog", "live", "model"] = "model"
     highlights: list[str] = Field(default_factory=list)
     # Catalog / live only: which highlights belong to which area.

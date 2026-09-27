@@ -64,7 +64,7 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
 
 def day_plan(ctx: SharedContext) -> list[dict]:
     """Which area each day visits, decided by code (round-robin over the research areas), plus
-    the highlights that are really in that area when the catalog (or OpenStreetMap) knows
+    the highlights that are really in that area when the catalog (or a live places source) knows
     them. A revisit of an area gets no highlights, so the model explores other spots instead
     of repeating them. Days with rain in the real forecast are flagged."""
     req, research = ctx.user_request, ctx.destination_research
@@ -91,7 +91,7 @@ def forecast_days(ctx: SharedContext) -> list[WeatherDay]:
 
 
 def free_alternative(ctx: SharedContext, area: str, generated: str) -> str:
-    """For catalog (and OpenStreetMap) cities the free fallback is written by code and anchored to the day's area:
+    """For catalog (and live-places) cities the free fallback is written by code and anchored to the day's area:
     when the budget loop swaps it in, the model can't send every day to the same district
     (seen in a real run: "Explore Alfama's streets" for Baixa, Alfama and Belém)."""
     research = ctx.destination_research

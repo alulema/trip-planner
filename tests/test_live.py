@@ -350,7 +350,7 @@ def test_unknown_city_gets_districts_and_places_from_openstreetmap():
     assert ctx.token_usage["destination_research"].total > 0  # the model still estimates costs
     day1 = ctx.itinerary_draft.days[0]
     assert day1.area == "Cerro Alegre" and day1.free_alternative == "Paseo libre por Cerro Alegre: Paseo Yugoslavo"
-    assert any("OpenStreetMap" in d.get("message", "") for d in traces(events, "completed"))
+    assert any("source: live places" in d.get("message", "") for d in traces(events, "completed"))
 
 
 def test_live_failure_keeps_the_previous_behaviour():
@@ -392,3 +392,53 @@ def test_start_date_is_validated():
     assert req.end_date == TODAY + timedelta(days=2)
     assert json.loads(LiveData().model_dump_json()) == {"location": None, "weather": None, "places": None,
                                                         "fx": None, "errors": {}}
+
+
+# --------------------------------------------------------------------------- Wikidata
+
+
+def binding(name, qid, lat, lon, links=0):
+    return {"itemLabel": {"value": name}, "type": {"value": f"http://www.wikidata.org/entity/{qid}"},
+            "coord": {"value": f"Point({lon} {lat})"}, "links": {"value": str(links)}}
+
+
+WIKIDATA_ROWS = {"results": {"bindings": [
+    binding("Cerro Alegre", "Q123705", -33.043, -71.627),
+    binding("Cerro Bellavista", "Q123705", -33.047, -71.620),
+    binding("Palacio Baburizza", "Q33506", -33.0431, -71.6268, links=8),
+    binding("Paseo Yugoslavo", "Q6017969", -33.0432, -71.6272, links=2),
+    binding("La Sebastiana", "Q207694", -33.0475, -71.6205, links=25),
+    binding("Q98765432", "Q33506", -33.0476, -71.6206),  # unlabelled item
+    binding("Valparaíso", "Q570116", -33.04, -71.62, links=90),  # the city itself
+]}}
+
+
+def test_wikidata_places_rank_by_sitelinks_and_pair_with_districts():
+    from app.live.wikidata import WikidataPlaces, build_query
+
+    calls = []
+    places = WikidataPlaces(Http(60, transport=transport({"query.wikidata.org": WIKIDATA_ROWS}, calls)))
+    report = asyncio.run(places.places(POINT, "es"))
+    assert report.area_highlights == {"Cerro Bellavista": ["La Sebastiana"],
+                                      "Cerro Alegre": ["Palacio Baburizza", "Paseo Yugoslavo"]}
+    assert list(report.area_highlights)[0] == "Cerro Bellavista"  # 25 sitelinks outrank the rest
+    assert report.area_free["Cerro Alegre"] == ["Paseo Yugoslavo"]
+    assert report.source.name == "Wikidata (SPARQL)"
+    q = calls[0].url.params["query"]
+    assert "Point(-71.62 -33.04)" in q and 'wikibase:radius "6"' in q and '"es,en"' in q
+    assert "wd:Q123705" in build_query(POINT, "en") and '"en"' in build_query(POINT, "en")
+
+
+def test_places_chain_falls_back_to_overpass():
+    from app.live.wikidata import PlacesChain, WikidataPlaces
+
+    calls = []
+    t = transport({"query.wikidata.org": 500, "overpass-api.de": {"elements": ELEMENTS}}, calls)
+    chain = PlacesChain(WikidataPlaces(Http(60, transport=t, retries=0)),
+                        OverpassPlaces(Http(60, transport=t, retries=0), urls=("https://overpass-api.de/x",)))
+    report = asyncio.run(chain.places(POINT, "es"))
+    assert report.source.name.startswith("OpenStreetMap") and [c.url.host for c in calls] == [
+        "query.wikidata.org", "overpass-api.de"]
+    both_down = PlacesChain(WikidataPlaces(Http(60, transport=transport({"query.wikidata.org": 500}), retries=0)))
+    with pytest.raises(LiveError, match="HTTP 500"):
+        asyncio.run(both_down.places(POINT, "es"))

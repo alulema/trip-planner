@@ -8,7 +8,8 @@ the curated catalog or the model.
 Phase 1 sources (free, no API key):
   * Geocoding + weather: Open-Meteo (forecast for trips within 16 days; the same dates of an
     earlier year from its historical archive beyond that). CC BY 4.0, non-commercial use.
-  * Places: OpenStreetMap via the Overpass API (two public instances, tried in order) — districts plus notable places (those linked
+  * Places: Wikidata (SPARQL geo query; CC0), falling back to OpenStreetMap via the Overpass
+    API — districts plus notable places (those linked
     to Wikidata) for destinations outside the catalog. ODbL.
   * Exchange rates: Frankfurter (European Central Bank reference rates), with
     ExchangeRate-API's open endpoint as a fallback for currencies the ECB doesn't publish.
@@ -158,14 +159,20 @@ def build_live(mode: str, transport: httpx.AsyncBaseTransport | None = None,
         raise ValueError(f"unknown LIVE_DATA mode: {mode!r}")
     from .fx import FxChain
     from .open_meteo import OpenMeteoGeocoder, OpenMeteoWeather
-    from .osm import OverpassPlaces
+    from .osm import OVERPASS_URLS, OverpassPlaces
+    from .wikidata import PlacesChain, WikidataPlaces
 
     return LiveServices(
         "open-meteo+osm+ecb",
         geocoder=OpenMeteoGeocoder(Http(24 * 3600, transport=transport)),
         weather=OpenMeteoWeather(Http(3600, transport=transport)),
-        # Overpass: no retry on the same instance; the next instance is the retry.
-        places=OverpassPlaces(Http(24 * 3600, timeout_seconds=13, transport=transport, retries=0), urls=overpass_urls),
+        # Wikidata first (fast, reliable from shared runners); Overpass as the fallback (in CI its
+        # public instances often answered 504 or timed out). No retry on the same endpoint.
+        places=PlacesChain(
+            WikidataPlaces(Http(24 * 3600, timeout_seconds=12, transport=transport, retries=0)),
+            OverpassPlaces(Http(24 * 3600, timeout_seconds=12, transport=transport, retries=0),
+                           urls=overpass_urls or OVERPASS_URLS[:1]),
+        ),
         fx=FxChain(Http(6 * 3600, transport=transport)),
         timeout_seconds=27,
     )

@@ -102,7 +102,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 - Timeout duro de 180 s.
 - Cancelación de la cadena si el cliente se desconecta.
 - Tope de 2 iteraciones en el ciclo de conflicto.
-- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total; 13 s por instancia de Overpass), un reintento (Overpass: segunda instancia pública), tope de 27 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
+- Datos en vivo: timeout por llamada (3 s de conexión, 6 s en total; 12 s para Wikidata y para Overpass), un reintento (lugares: Wikidata y luego Overpass), tope de 27 s por proveedor, caché en memoria (clima 1 h, tipo de cambio 6 h, lugares y geocodificación 24 h). Ningún fallo es fatal.
 
 ### Datos en vivo (fase 1)
 
@@ -110,7 +110,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
 |---|---|---|
 | Coordenadas y país | Open-Meteo Geocoding | Base de todo lo demás |
 | Clima de las fechas | Open-Meteo: pronóstico si el viaje empieza dentro de ~16 días; si no, las mismas fechas de un año anterior (archivo histórico), marcadas como **referencia** | Nota de clima escrita por código, clima por día, marca de lluvia para el planificador |
-| Barrios y lugares notables | OpenStreetMap vía Overpass: barrios con nombre + lugares enlazados a Wikidata, emparejados por distancia con su barrio | Solo ciudades fuera del catálogo (`source="live"`) |
+| Barrios y lugares notables | Wikidata (consulta SPARQL geográfica, CC0): barrios + museos, miradores, monumentos, parques…, ordenados por número de enlaces a Wikipedia; respaldo: OpenStreetMap vía Overpass. Cada lugar se empareja por distancia con su barrio | Solo ciudades fuera del catálogo (`source="live"`) |
 | USD → moneda local | Frankfurter (BCE); ExchangeRate-API para monedas que el BCE no publica | Total en moneda local, con tasa, fuente y fecha |
 
 - La fecha de inicio entra en el formulario y en la API (opcional, hasta un año adelante).
@@ -125,7 +125,7 @@ Todo resultado, incluidos los errores de validación y los rechazos por límites
   - `trip-planner-ollama` (Ollama 0.12.3 con `qwen2.5:1.5b-instruct` incluido, `:11434`, sin descarga al arrancar).
 - **Pod sugerido** (tope 2 vCPU / 4 GiB): Ollama 1.75 vCPU / 3 GiB y app 0.25 vCPU / 1 GiB. `shareable: false`. Datos completos en `docs/HANDOFF.md`.
 - **Workflow `image.yml`:**
-  - `test`: 91 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
+  - `test`: 93 tests sin red (LLM y datos en vivo simulados; los proveedores se prueban con `httpx.MockTransport`);
   - `e2e`: Qwen real con los límites del pod, APIs de datos en vivo reales y 4 viajes por SSE (fechas dentro y fuera de la ventana de pronóstico);
   - `image`: publica solo en `main` y solo si pasan `test` y `e2e`.
 - **Workflow `model-benchmark.yml`** (manual): los mismos viajes con 1.5B y 3B en paralelo.
@@ -342,8 +342,10 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - **Hallazgo del primer e2e real:** Kioto salió completo (pronóstico real 10–24 °C, 1 USD = 157,59 JPY del BCE, investigación con 0 tokens), pero tres peticiones sueltas a Open-Meteo se atascaron hasta el timeout (geocodificación de Lisboa y Valparaíso, pronóstico de Hanói) mientras las siguientes respondían al instante. La cadena cayó correctamente a catálogo/modelo y lo dijo en el trace. Se añadió un reintento (solo para timeouts, errores de conexión y 5xx), timeout de conexión de 3 s y registro de cada fallo con su duración.
 - **Segundo e2e real:** los logs mostraron un patrón claro: la *primera* petición a Open-Meteo de cada viaje se atasca 3 s (timeout de conexión) y el reintento responde al instante. Con el reintento, las cuatro ciudades obtuvieron clima y tipo de cambio reales. Lo único que faltó fue OSM: la instancia pública de Overpass respondió `504 Gateway Timeout` (sobrecarga habitual). Se añadió una segunda instancia pública (`overpass.private.coffee`) como respaldo; `OVERPASS_URL` acepta una lista.
 - **Tercer e2e real:** clima y tipo de cambio otra vez reales en los cuatro viajes, pero **las dos** instancias de Overpass agotaron su timeout de 10 s. Si fallan dos servidores independientes, el problema era la consulta, no la carga: una búsqueda por radio (`around`) sobre nodos, vías *y relaciones*, con `out center` en relaciones (el servidor resuelve la geometría de cada miembro). Se reescribió con una caja delimitadora (usa el índice espacial) y solo nodos y vías; el log registra ahora cuántos elementos devuelve y en cuánto tiempo.
+- **Cuarto e2e real:** aun con la consulta liviana, `overpass-api.de` respondió 504 y la segunda instancia agotó el timeout. Con cuatro corridas se ve que las instancias públicas de Overpass no son fiables desde runners compartidos, y cada fallo sumaba ~28 s al viaje. Se pasó a **Wikidata** como fuente principal de lugares (SPARQL geográfico: barrios y lugares por clase, con coordenadas y número de enlaces a Wikipedia como medida de notoriedad), con Overpass (una instancia) de respaldo. El emparejamiento barrio↔lugar se extrajo a una función común (`pair`), igual para ambas fuentes.
 - **Dónde:** `app/live/`, `app/agents/live_data.py`, `app/agents/destination_research.py`, `app/agents/itinerary_planning.py` (`forecast_days`, marca de lluvia), `app/agents/synthesis.py` (`local_fx`), `static/app.js` (panel de fuentes).
-- **Evidencia:** 28 tests nuevos (26 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
+- **Dónde (lugares):** `app/live/wikidata.py` (`WikidataPlaces`, `PlacesChain`), `app/live/osm.py` (`OverpassPlaces`, `pair`).
+- **Evidencia:** 30 tests nuevos (28 en `tests/test_live.py`, 2 en `tests/test_api.py`); e2e con APIs reales en CI (ver la tabla de resultados).
 
 ---
 
@@ -362,7 +364,7 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 | 2026-09-27 | 3e | Atracciones gratuitas, filtro de narrativa (D10, D12) | `4321762`, `9bbd063` |
 | 2026-09-27 | — | **MVP fusionado a `main`** e imágenes publicadas en GHCR | PR #1 → `4c6f232` |
 | 2026-09-27 | 4 | Orquestación con LangGraph (D15) | PR #2 → `223bd7e` |
-| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, OpenStreetMap, tipo de cambio, fecha de viaje (D17) | `213f143`, `431b239`, instancia Overpass de respaldo |
+| 2026-09-27 | 5 | Datos en vivo, fase 1: clima, lugares (Wikidata/OSM), tipo de cambio, fecha de viaje (D17) | `213f143`, `431b239`, `fe5498c`, `bc06e24`, Wikidata |
 
 ---
 
@@ -375,5 +377,5 @@ La latencia varía entre runners de GitHub (se vio de 21 a 63 s con los mismos t
 - [ ] Mediciones de latencia con varias ejecuciones por escenario (mediana) para el post.
 - [ ] Capturas del panel de trace y del grafo (`/api/graph`) para el post.
 - [ ] Datos en vivo, fase 2: precios reales de alojamiento/vuelos detrás de un `PriceProvider` (requiere key y acuerdo comercial; Amadeus Self-Service cierra en julio de 2026).
-- [ ] Revisar la calidad de OSM en más ciudades fuera del catálogo (nombres de barrios, lugares cerca de los límites).
+- [ ] Revisar la calidad de Wikidata/OSM en más ciudades fuera del catálogo (nombres de barrios, lugares cerca de los límites).
 - [ ] Uso comercial: Open-Meteo gratis es no comercial; si el demo cambia de naturaleza, plan comercial u otro proveedor detrás de la misma interfaz, y Overpass propio (`OVERPASS_URL`).

@@ -42,19 +42,19 @@ The first runs with the real 1.5B model got facts wrong: it put Shibuya (Tokyo) 
 |---|---|---|
 | Coordinates, country | [Open-Meteo Geocoding](https://open-meteo.com/en/docs/geocoding-api) | Everything below |
 | Weather for the travel dates | [Open-Meteo](https://open-meteo.com/) forecast when the trip starts within ~16 days; otherwise the same dates of an earlier year from its historical archive, labelled as a **reference**, never as a forecast | The season note (written by code), the weather on each day, rain flags for the planner |
-| Districts and notable places | [OpenStreetMap](https://www.openstreetmap.org/copyright) via the [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API): named districts around the centre plus places linked to Wikidata (museums, viewpoints, monuments, parks…), each paired by distance with its nearest district | Areas and highlights for cities **outside** the catalog |
+| Districts and notable places | [Wikidata](https://www.wikidata.org/) (SPARQL geo query): neighbourhoods around the centre plus museums, viewpoints, monuments, parks…, ranked by their number of Wikipedia sitelinks. Fallback: [OpenStreetMap](https://www.openstreetmap.org/copyright) via the [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) (places linked to Wikidata). Either way each place is paired by distance with its nearest district | Areas and highlights for cities **outside** the catalog |
 | USD → local currency | [Frankfurter](https://frankfurter.dev/) (European Central Bank reference rates); [ExchangeRate-API](https://www.exchangerate-api.com) open endpoint for currencies the ECB doesn't publish | The total in the local currency |
 
 Rules that keep it honest and cheap:
 
 - **Every figure shows its source and fetch time.** The UI lists each source with its attribution; the budget paragraph names the rate, its source and date.
-- **Nothing live is mandatory.** Each call has a timeout (3 s to connect, 6 s in total) and one retry on timeouts, connection errors and 5xx; Overpass falls back to a second public instance. Results go to an in-memory TTL cache (weather 1 h, rates 6 h, places and geocoding 24 h). A failure is recorded in `live_data.errors`, shown in the trace, and the chain falls back to the catalog or the model.
+- **Nothing live is mandatory.** Each call has a timeout (3 s to connect, 6 s in total) and one retry on timeouts, connection errors and 5xx; Places try Wikidata first and Overpass second. Results go to an in-memory TTL cache (weather 1 h, rates 6 h, places and geocoding 24 h). A failure is recorded in `live_data.errors`, shown in the trace, and the chain falls back to the catalog or the model.
 - **The model never restates live numbers.** Temperatures, rain and rates are written into the text by code.
 - **Prices are still estimates.** Lodging, food and activity costs come from the catalog or the model, not from booking APIs.
 
 The travel **start date** is part of the request (the form defaults to two weeks ahead, within the forecast window). Without a date the chain still works, and the season note comes from the model.
 
-Terms to respect when you deploy: Open-Meteo's free API is for non-commercial use and requires attribution (CC BY 4.0); OpenStreetMap data is ODbL and requires attribution; the public Overpass instance asks for moderate use (the demo's rate limits keep it far below). For a commercial deployment, use Open-Meteo's commercial plan or another provider behind the same interface, and your own Overpass instance (`OVERPASS_URL`).
+Terms to respect when you deploy: Open-Meteo's free API is for non-commercial use and requires attribution (CC BY 4.0); OpenStreetMap data is ODbL and requires attribution; the public Overpass instance asks for moderate use (the demo's rate limits keep it far below). Wikidata is CC0 and its query service asks for a descriptive User-Agent (the app sends one). For a commercial deployment, use Open-Meteo's commercial plan or another provider behind the same interface, and your own Overpass instance (`OVERPASS_URL`).
 
 ## Orchestration with LangGraph
 
@@ -171,7 +171,7 @@ The script plans four real trips (three catalog cities and one outside the catal
 | `OLLAMA_MODEL` | `qwen2.5:1.5b-instruct` | Model tag. It must exist in the Ollama server. |
 | `DECISION_ENGINE` | `rules` | Engine for typed decisions. `rules` is the only one available today. |
 | `LIVE_DATA` | `on` (`mock` when `LLM_MODE=mock`) | `on` calls the live data sources, `mock` returns canned data, `off` skips the step. |
-| `OVERPASS_URL` | `overpass-api.de`, then `overpass.private.coffee` | Comma-separated Overpass API endpoints, tried in order (point it to your own instance for heavier use). |
+| `OVERPASS_URL` | `https://overpass-api.de/api/interpreter` | Comma-separated Overpass API endpoints for the places fallback, tried in order (point it to your own instance for heavier use). |
 | `MAX_TOKENS_PER_SESSION` | `6000` | Tokens one trip may consume (prompt + generated, all LLM calls). |
 | `CHAIN_TIMEOUT_SECONDS` | `180` | Hard wall-clock limit for one chain. |
 | `MAX_CONCURRENT_SESSIONS` | `1` | Chains running at once. CPU inference is serialized anyway. |
@@ -204,7 +204,7 @@ Stream events: `session`; `trace` (every step transition and every decision); `s
 
 - The app is **stateless and ephemeral**: nothing is stored between requests, and it tolerates being stopped at any moment. The model is loaded in the background at startup (`llm_ready`), and the first request after a cold start can take longer.
 - It serves plain HTTP on `0.0.0.0:8080` from the root path `/`, with **no TLS and no authentication**. It is designed to run behind a reverse proxy or gateway that terminates TLS and handles authentication. SSE responses set `Cache-Control: no-cache` and `X-Accel-Buffering: no`.
-- The app needs **outbound HTTPS** to `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `overpass-api.de` and `overpass.private.coffee` (or `OVERPASS_URL`), `api.frankfurter.dev` and `open.er-api.com`. Without egress the chain still completes, using the catalog and the model; set `LIVE_DATA=off` to skip the calls entirely.
+- The app needs **outbound HTTPS** to `geocoding-api.open-meteo.com`, `api.open-meteo.com`, `archive-api.open-meteo.com`, `query.wikidata.org`, `overpass-api.de` (or `OVERPASS_URL`), `api.frankfurter.dev` and `open.er-api.com`. Without egress the chain still completes, using the catalog and the model; set `LIVE_DATA=off` to skip the calls entirely.
 - The Ollama container needs no inbound access except from the app. If both containers share a network namespace (one pod), keep the default `OLLAMA_HOST=http://localhost:11434`.
 - Suggested sizing: about 2 vCPU / 4 GiB in total, biased towards Ollama (for example, Ollama 1.75 vCPU / 3 GiB and the app 0.25 vCPU / 1 GiB).
 - If the client disconnects mid-run, the chain is cancelled so it stops using CPU.
@@ -213,7 +213,7 @@ Stream events: `session`; `trace` (every step transition and every decision); `s
 
 - Costs are approximate references: from the curated catalog for known cities, otherwise estimates from the small model's general knowledge (clamped to sane ranges). Weather and exchange rates are live; lodging, food and activity prices are not, and flights to the destination aren't included.
 - Beyond ~16 days there is no real forecast: the weather shown is the same dates of an earlier year, labelled as a reference.
-- Outside the catalog, districts and places come from OpenStreetMap when available. The pairing of a place with its nearest district is geometric, so a place near a boundary can land in the neighbouring district; OSM's district names vary by city. If OSM has too little data, a 1.5B model picks the districts and can get them wrong or invent places.
+- Outside the catalog, districts and places come from Wikidata (or OpenStreetMap) when available. The pairing of a place with its nearest district is geometric, so a place near a boundary can land in the neighbouring district; OSM's district names vary by city. If OSM has too little data, a 1.5B model picks the districts and can get them wrong or invent places.
 - The narrative is filtered in code: markdown is stripped, and a sentence is dropped if it talks about money or names a place ("Museum of X", "X Park") that appears nowhere in the plan. The filter is a heuristic, so a wrong detail attached to a known name (for example "Kyoto Central station") can still slip through.
 - CPU inference: about 35–40 s per 3-day trip with the model on 1.75 vCPU (measured in CI with pod-like limits), dominated by the itinerary and the narrative.
 - A 1.5B model occasionally writes rough text or picks odd areas. Pick a larger model if your hardware allows it.
@@ -230,4 +230,4 @@ A model-backed decision engine (a typed-decision model such as Jev, behind the s
 - Imran Ahmad, *30 Agents Every AI Engineer Must Build*, Packt, chapter 7: Chain-of-Agents Orchestrator, Memory-Augmented Multi-Agent Systems, Conflict Resolution Mechanisms.
 - TypeSafe AI, *Introducing System One Models & Jev*: https://typesafe.ai/blog/introducing-system-one-models-and-jev
 - Qwen 2.5 via Ollama: https://ollama.com/library/qwen2.5
-- Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL). Exchange rates: European Central Bank via [Frankfurter](https://frankfurter.dev/); [Rates By Exchange Rate API](https://www.exchangerate-api.com).
+- Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Places from [Wikidata](https://www.wikidata.org/) (CC0); map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL). Exchange rates: European Central Bank via [Frankfurter](https://frankfurter.dev/); [Rates By Exchange Rate API](https://www.exchangerate-api.com).

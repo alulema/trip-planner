@@ -95,9 +95,20 @@ class OverpassPlaces:
         return report
 
 
+Area = tuple[str, float, float]  # name, lat, lon
+Poi = tuple[str, float, float, float, bool]  # name, lat, lon, notability score, free to visit
+OSM_SOURCE = dict(name="OpenStreetMap (Overpass API)", url="https://www.openstreetmap.org/copyright",
+                  attribution=ATTRIBUTION)
+
+
 def pair_places(elements: list[dict], point: GeoPoint, lang: str) -> PlacesReport | None:
-    areas: list[tuple[str, float, float]] = []
-    pois: list[tuple[str, float, float, float, bool]] = []
+    areas, pois = parse_osm(elements, point, lang)
+    return pair(areas, pois, SourceInfo(**OSM_SOURCE))
+
+
+def parse_osm(elements: list[dict], point: GeoPoint, lang: str) -> tuple[list[Area], list[Poi]]:
+    areas: list[Area] = []
+    pois: list[Poi] = []
     city = normalize(point.name).strip()
     for el in elements:
         tags = el.get("tags") or {}
@@ -113,12 +124,16 @@ def pair_places(elements: list[dict], point: GeoPoint, lang: str) -> PlacesRepor
             continue
         score = kind[0] + (2 if tags.get("wikipedia") else 0) + min(len(tags), 30) / 10
         pois.append((name, lat, lon, score, kind[1]))
+    return areas, pois
 
-    # Pair every place with its nearest district.
+
+def pair(areas: list[Area], pois: list[Poi], source: SourceInfo) -> PlacesReport | None:
+    """Pair every place with its nearest district, keep the best districts. Shared by every
+    places provider, so the area↔highlight pairing works the same whatever the source."""
     by_area: dict[str, list[tuple[float, str, bool]]] = {}
     for name, lat, lon, score, free in pois:
-        best = min(areas, key=lambda a: _distance(lat, lon, a[1], a[2]), default=None)
-        if best is None or _distance(lat, lon, best[1], best[2]) > MAX_PAIR_DISTANCE_M:
+        best = min(areas, key=lambda a: distance(lat, lon, a[1], a[2]), default=None)
+        if best is None or distance(lat, lon, best[1], best[2]) > MAX_PAIR_DISTANCE_M:
             continue
         if normalize(name).strip() == normalize(best[0]).strip():
             continue
@@ -133,7 +148,7 @@ def pair_places(elements: list[dict], point: GeoPoint, lang: str) -> PlacesRepor
                 seen.add(key)
                 top.append((score, name, free))
         top = top[:HIGHLIGHTS_PER_AREA]
-        ranked.append((sum(s for s, _, _ in top), area, top))
+        ranked.append((sum(sc for sc, _, _ in top), area, top))
     ranked.sort(key=lambda x: (-x[0], x[1]))
     chosen = ranked[:MAX_AREAS]
     if len(chosen) < 2:
@@ -141,20 +156,19 @@ def pair_places(elements: list[dict], point: GeoPoint, lang: str) -> PlacesRepor
     return PlacesReport(
         area_highlights={area: [n for _, n, _ in top] for _, area, top in chosen},
         area_free={area: [n for _, n, free in top if free] for _, area, top in chosen},
-        source=SourceInfo(name="OpenStreetMap (Overpass API)", url="https://www.openstreetmap.org/copyright",
-                          attribution=ATTRIBUTION),
+        source=source,
     )
 
 
 def _name(tags: dict, lang: str) -> str:
     """Localised name when OSM has one; the local name if it is in Latin script; else English."""
     for candidate in (tags.get(f"name:{lang}"), tags.get("name"), tags.get("name:en")):
-        if candidate and _latin(candidate):
+        if candidate and latin(candidate):
             return " ".join(candidate.split())[:60]
     return ""
 
 
-def _latin(text: str) -> bool:
+def latin(text: str) -> bool:
     return all(ord(c) < 0x250 for c in text if c.isalpha())
 
 
@@ -165,7 +179,7 @@ def _coords(el: dict) -> tuple[float | None, float | None]:
     return center.get("lat"), center.get("lon")
 
 
-def _distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Haversine distance in metres."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
     dp, dl = p2 - p1, math.radians(lon2 - lon1)

@@ -37,7 +37,7 @@ SCENARIOS = [
     # A cheap destination: its reference costs should differ from the others.
     ("Destino económico (es)", {"destination": "Hanói", "days": 2, "budget_usd": 400, "travelers": 1,
                                 "interests": "comida callejera,historia", "lang": "es", "start_date": _in(10)}, False),
-    # Not in the curated catalog: districts and places from OpenStreetMap, costs from the model.
+    # Not in the curated catalog: districts and places from Wikidata/OpenStreetMap, costs from the model.
     ("Fuera del catálogo (es)", {"destination": "Valparaíso", "days": 2, "budget_usd": 600, "travelers": 1,
                                  "interests": "arte,miradores", "lang": "es", "start_date": _in(7)}, False),
 ]

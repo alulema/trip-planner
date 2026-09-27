@@ -140,7 +140,7 @@ async def fetch_live_data(state: SharedContext, runtime: Runtime[Deps]) -> dict:
 
 RESEARCH_SOURCES = {
     "catalog": "source: catalog (areas, highlights, costs)",
-    "live": "source: OpenStreetMap (areas, highlights) + model (costs)",
+    "live": "source: live places (areas, highlights) + model (costs)",
     "model": "source: model (not in catalog)",
 }
 
