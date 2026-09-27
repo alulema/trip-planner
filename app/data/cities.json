@@ -1,0 +1,1889 @@
+{
+ "_meta": {
+  "description": "Hand-curated reference data for popular destinations: real districts, well-known highlights and approximate mid-range costs in USD.",
+  "costs": "lodging_room_night_usd = mid-range room for up to 2 people; meal_usd = one casual meal for one person; transport_day_usd = local transport for one person per day. Approximate, not live prices.",
+  "version": "2026-09c",
+  "areas": "Each area lists highlights physically located in (or at the edge of) that district, so the itinerary never places a landmark in the wrong area.",
+  "free": "Per area, `free` lists highlights that can be visited without an entrance fee (squares, viewpoints, streets, parks, markets, free-entry temples/museums). Conservative: when in doubt, not listed."
+ },
+ "cities": [
+  {
+   "name": "Lisbon",
+   "country": "Portugal",
+   "aliases": [
+    "lisboa"
+   ],
+   "areas": [
+    {
+     "name": "Baixa",
+     "highlights": [
+      "Praça do Comércio",
+      "Elevador de Santa Justa"
+     ],
+     "free": [
+      "Praça do Comércio"
+     ]
+    },
+    {
+     "name": "Alfama",
+     "highlights": [
+      "Castelo de São Jorge",
+      "Miradouro de Santa Luzia"
+     ],
+     "free": [
+      "Miradouro de Santa Luzia"
+     ]
+    },
+    {
+     "name": "Belém",
+     "highlights": [
+      "Mosteiro dos Jerónimos",
+      "Torre de Belém"
+     ],
+     "free": []
+    }
+   ],
+   "lodging_room_night_usd": 110,
+   "meal_usd": 15,
+   "transport_day_usd": 7
+  },
+  {
+   "name": "Porto",
+   "country": "Portugal",
+   "aliases": [
+    "oporto"
+   ],
+   "areas": [
+    {
+     "name": "Ribeira",
+     "highlights": [
+      "Ponte Dom Luís I",
+      "Cais da Ribeira"
+     ],
+     "free": [
+      "Ponte Dom Luís I",
+      "Cais da Ribeira"
+     ]
+    },
+    {
+     "name": "Baixa",
+     "highlights": [
+      "Livraria Lello",
+      "Torre dos Clérigos"
+     ],
+     "free": []
+    },
+    {
+     "name": "Vila Nova de Gaia",
+     "highlights": [
+      "Port wine cellars",
+      "Jardim do Morro"
+     ],
+     "free": [
+      "Jardim do Morro"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 95,
+   "meal_usd": 14,
+   "transport_day_usd": 6
+  },
+  {
+   "name": "Madrid",
+   "country": "Spain",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Sol",
+     "highlights": [
+      "Puerta del Sol",
+      "Plaza Mayor"
+     ],
+     "free": [
+      "Puerta del Sol",
+      "Plaza Mayor"
+     ]
+    },
+    {
+     "name": "Palacio",
+     "highlights": [
+      "Palacio Real",
+      "Catedral de la Almudena"
+     ],
+     "free": [
+      "Catedral de la Almudena"
+     ]
+    },
+    {
+     "name": "Retiro",
+     "highlights": [
+      "Museo del Prado",
+      "Parque del Retiro"
+     ],
+     "free": [
+      "Parque del Retiro"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 120,
+   "meal_usd": 18,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Barcelona",
+   "country": "Spain",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Barri Gòtic",
+     "highlights": [
+      "Catedral de Barcelona",
+      "Plaça Reial"
+     ],
+     "free": [
+      "Plaça Reial"
+     ]
+    },
+    {
+     "name": "Eixample",
+     "highlights": [
+      "Sagrada Família",
+      "Casa Batlló"
+     ],
+     "free": []
+    },
+    {
+     "name": "Gràcia",
+     "highlights": [
+      "Park Güell",
+      "Plaça del Sol"
+     ],
+     "free": [
+      "Plaça del Sol"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 140,
+   "meal_usd": 20,
+   "transport_day_usd": 9
+  },
+  {
+   "name": "Seville",
+   "country": "Spain",
+   "aliases": [
+    "sevilla"
+   ],
+   "areas": [
+    {
+     "name": "Santa Cruz",
+     "highlights": [
+      "Real Alcázar",
+      "Catedral y La Giralda"
+     ],
+     "free": []
+    },
+    {
+     "name": "Triana",
+     "highlights": [
+      "Puente de Triana",
+      "Mercado de Triana"
+     ],
+     "free": [
+      "Puente de Triana",
+      "Mercado de Triana"
+     ]
+    },
+    {
+     "name": "Parque de María Luisa",
+     "highlights": [
+      "Plaza de España",
+      "Parque de María Luisa"
+     ],
+     "free": [
+      "Plaza de España",
+      "Parque de María Luisa"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 100,
+   "meal_usd": 15,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Paris",
+   "country": "France",
+   "aliases": [
+    "paris"
+   ],
+   "areas": [
+    {
+     "name": "Le Marais",
+     "highlights": [
+      "Place des Vosges",
+      "Musée Picasso"
+     ],
+     "free": [
+      "Place des Vosges"
+     ]
+    },
+    {
+     "name": "Saint-Germain-des-Prés",
+     "highlights": [
+      "Musée d'Orsay",
+      "Jardin du Luxembourg"
+     ],
+     "free": [
+      "Jardin du Luxembourg"
+     ]
+    },
+    {
+     "name": "Montmartre",
+     "highlights": [
+      "Sacré-Cœur",
+      "Place du Tertre"
+     ],
+     "free": [
+      "Sacré-Cœur",
+      "Place du Tertre"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 180,
+   "meal_usd": 25,
+   "transport_day_usd": 10
+  },
+  {
+   "name": "London",
+   "country": "United Kingdom",
+   "aliases": [
+    "londres"
+   ],
+   "areas": [
+    {
+     "name": "Westminster",
+     "highlights": [
+      "Westminster Abbey",
+      "Houses of Parliament"
+     ],
+     "free": []
+    },
+    {
+     "name": "Bloomsbury",
+     "highlights": [
+      "British Museum",
+      "Charles Dickens Museum"
+     ],
+     "free": [
+      "British Museum"
+     ]
+    },
+    {
+     "name": "South Bank",
+     "highlights": [
+      "Tate Modern",
+      "London Eye"
+     ],
+     "free": [
+      "Tate Modern"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 200,
+   "meal_usd": 25,
+   "transport_day_usd": 15
+  },
+  {
+   "name": "Rome",
+   "country": "Italy",
+   "aliases": [
+    "roma"
+   ],
+   "areas": [
+    {
+     "name": "Centro Storico",
+     "highlights": [
+      "Pantheon",
+      "Fontana di Trevi"
+     ],
+     "free": [
+      "Fontana di Trevi"
+     ]
+    },
+    {
+     "name": "Colosseo",
+     "highlights": [
+      "Colosseo",
+      "Foro Romano"
+     ],
+     "free": []
+    },
+    {
+     "name": "Vaticano",
+     "highlights": [
+      "Musei Vaticani",
+      "Basilica di San Pietro"
+     ],
+     "free": [
+      "Basilica di San Pietro"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 150,
+   "meal_usd": 22,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Florence",
+   "country": "Italy",
+   "aliases": [
+    "florencia",
+    "firenze"
+   ],
+   "areas": [
+    {
+     "name": "Centro Storico",
+     "highlights": [
+      "Duomo di Firenze",
+      "Galleria degli Uffizi"
+     ],
+     "free": [
+      "Duomo di Firenze"
+     ]
+    },
+    {
+     "name": "Oltrarno",
+     "highlights": [
+      "Palazzo Pitti",
+      "Giardino di Boboli"
+     ],
+     "free": []
+    },
+    {
+     "name": "San Niccolò",
+     "highlights": [
+      "Piazzale Michelangelo",
+      "San Miniato al Monte"
+     ],
+     "free": [
+      "Piazzale Michelangelo",
+      "San Miniato al Monte"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 150,
+   "meal_usd": 22,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Venice",
+   "country": "Italy",
+   "aliases": [
+    "venecia",
+    "venezia"
+   ],
+   "areas": [
+    {
+     "name": "San Marco",
+     "highlights": [
+      "Basilica di San Marco",
+      "Palazzo Ducale"
+     ],
+     "free": [
+      "Basilica di San Marco"
+     ]
+    },
+    {
+     "name": "Dorsoduro",
+     "highlights": [
+      "Gallerie dell'Accademia",
+      "Peggy Guggenheim Collection"
+     ],
+     "free": []
+    },
+    {
+     "name": "San Polo",
+     "highlights": [
+      "Mercato di Rialto",
+      "Basilica dei Frari"
+     ],
+     "free": [
+      "Mercato di Rialto"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 190,
+   "meal_usd": 28,
+   "transport_day_usd": 20
+  },
+  {
+   "name": "Amsterdam",
+   "country": "Netherlands",
+   "aliases": [
+    "amsterdam"
+   ],
+   "areas": [
+    {
+     "name": "Museumkwartier",
+     "highlights": [
+      "Rijksmuseum",
+      "Van Gogh Museum"
+     ],
+     "free": []
+    },
+    {
+     "name": "Grachtengordel",
+     "highlights": [
+      "Anne Frank Huis",
+      "De Negen Straatjes"
+     ],
+     "free": [
+      "De Negen Straatjes"
+     ]
+    },
+    {
+     "name": "De Pijp",
+     "highlights": [
+      "Albert Cuypmarkt",
+      "Heineken Experience"
+     ],
+     "free": [
+      "Albert Cuypmarkt"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 180,
+   "meal_usd": 22,
+   "transport_day_usd": 10
+  },
+  {
+   "name": "Berlin",
+   "country": "Germany",
+   "aliases": [
+    "berlin"
+   ],
+   "areas": [
+    {
+     "name": "Mitte",
+     "highlights": [
+      "Brandenburger Tor",
+      "Museumsinsel"
+     ],
+     "free": [
+      "Brandenburger Tor"
+     ]
+    },
+    {
+     "name": "Tiergarten",
+     "highlights": [
+      "Reichstag",
+      "Großer Tiergarten"
+     ],
+     "free": [
+      "Reichstag",
+      "Großer Tiergarten"
+     ]
+    },
+    {
+     "name": "Friedrichshain",
+     "highlights": [
+      "East Side Gallery",
+      "Oberbaumbrücke"
+     ],
+     "free": [
+      "East Side Gallery",
+      "Oberbaumbrücke"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 120,
+   "meal_usd": 15,
+   "transport_day_usd": 10
+  },
+  {
+   "name": "Prague",
+   "country": "Czechia",
+   "aliases": [
+    "praga",
+    "praha"
+   ],
+   "areas": [
+    {
+     "name": "Staré Město",
+     "highlights": [
+      "Staroměstské náměstí",
+      "Klementinum"
+     ],
+     "free": [
+      "Staroměstské náměstí"
+     ]
+    },
+    {
+     "name": "Hradčany",
+     "highlights": [
+      "Pražský hrad",
+      "Katedrála svatého Víta"
+     ],
+     "free": []
+    },
+    {
+     "name": "Malá Strana",
+     "highlights": [
+      "Kostel svatého Mikuláše",
+      "Petřín"
+     ],
+     "free": [
+      "Petřín"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 90,
+   "meal_usd": 12,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Vienna",
+   "country": "Austria",
+   "aliases": [
+    "viena",
+    "wien"
+   ],
+   "areas": [
+    {
+     "name": "Innere Stadt",
+     "highlights": [
+      "Stephansdom",
+      "Hofburg"
+     ],
+     "free": [
+      "Stephansdom"
+     ]
+    },
+    {
+     "name": "Hietzing",
+     "highlights": [
+      "Schloss Schönbrunn",
+      "Tiergarten Schönbrunn"
+     ],
+     "free": []
+    },
+    {
+     "name": "Landstraße",
+     "highlights": [
+      "Belvedere",
+      "Hundertwasserhaus"
+     ],
+     "free": [
+      "Hundertwasserhaus"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 130,
+   "meal_usd": 18,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Budapest",
+   "country": "Hungary",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Várnegyed",
+     "highlights": [
+      "Halászbástya",
+      "Mátyás-templom"
+     ],
+     "free": [
+      "Halászbástya"
+     ]
+    },
+    {
+     "name": "Lipótváros",
+     "highlights": [
+      "Országház (Parliament)",
+      "Szent István-bazilika"
+     ],
+     "free": []
+    },
+    {
+     "name": "Városliget",
+     "highlights": [
+      "Széchenyi fürdő",
+      "Hősök tere"
+     ],
+     "free": [
+      "Hősök tere"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 85,
+   "meal_usd": 12,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Athens",
+   "country": "Greece",
+   "aliases": [
+    "atenas"
+   ],
+   "areas": [
+    {
+     "name": "Plaka",
+     "highlights": [
+      "Acropolis",
+      "Anafiotika"
+     ],
+     "free": [
+      "Anafiotika"
+     ]
+    },
+    {
+     "name": "Makrygianni",
+     "highlights": [
+      "Acropolis Museum",
+      "Philopappos Hill"
+     ],
+     "free": [
+      "Philopappos Hill"
+     ]
+    },
+    {
+     "name": "Monastiraki",
+     "highlights": [
+      "Ancient Agora",
+      "Monastiraki flea market"
+     ],
+     "free": [
+      "Monastiraki flea market"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 100,
+   "meal_usd": 15,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Istanbul",
+   "country": "Türkiye",
+   "aliases": [
+    "estambul"
+   ],
+   "areas": [
+    {
+     "name": "Sultanahmet",
+     "highlights": [
+      "Hagia Sophia",
+      "Blue Mosque"
+     ],
+     "free": [
+      "Blue Mosque"
+     ]
+    },
+    {
+     "name": "Eminönü",
+     "highlights": [
+      "Spice Bazaar",
+      "Rüstem Pasha Mosque"
+     ],
+     "free": [
+      "Spice Bazaar",
+      "Rüstem Pasha Mosque"
+     ]
+    },
+    {
+     "name": "Beyoğlu",
+     "highlights": [
+      "İstiklal Caddesi",
+      "Galata Tower"
+     ],
+     "free": [
+      "İstiklal Caddesi"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 80,
+   "meal_usd": 10,
+   "transport_day_usd": 4
+  },
+  {
+   "name": "Dublin",
+   "country": "Ireland",
+   "aliases": [
+    "dublin"
+   ],
+   "areas": [
+    {
+     "name": "Dublin 2",
+     "highlights": [
+      "Trinity College (Book of Kells)",
+      "St Stephen's Green"
+     ],
+     "free": [
+      "St Stephen's Green"
+     ]
+    },
+    {
+     "name": "The Liberties",
+     "highlights": [
+      "Guinness Storehouse",
+      "St Patrick's Cathedral"
+     ],
+     "free": []
+    },
+    {
+     "name": "Temple Bar",
+     "highlights": [
+      "Temple Bar",
+      "Ha'penny Bridge"
+     ],
+     "free": [
+      "Temple Bar",
+      "Ha'penny Bridge"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 180,
+   "meal_usd": 22,
+   "transport_day_usd": 9
+  },
+  {
+   "name": "Edinburgh",
+   "country": "United Kingdom",
+   "aliases": [
+    "edimburgo"
+   ],
+   "areas": [
+    {
+     "name": "Old Town",
+     "highlights": [
+      "Edinburgh Castle",
+      "Royal Mile"
+     ],
+     "free": [
+      "Royal Mile"
+     ]
+    },
+    {
+     "name": "New Town",
+     "highlights": [
+      "Princes Street Gardens",
+      "Scottish National Gallery"
+     ],
+     "free": [
+      "Princes Street Gardens",
+      "Scottish National Gallery"
+     ]
+    },
+    {
+     "name": "Holyrood",
+     "highlights": [
+      "Arthur's Seat",
+      "Palace of Holyroodhouse"
+     ],
+     "free": [
+      "Arthur's Seat"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 160,
+   "meal_usd": 20,
+   "transport_day_usd": 7
+  },
+  {
+   "name": "Copenhagen",
+   "country": "Denmark",
+   "aliases": [
+    "copenhague",
+    "kobenhavn"
+   ],
+   "areas": [
+    {
+     "name": "Indre By",
+     "highlights": [
+      "Nyhavn",
+      "Rosenborg Slot"
+     ],
+     "free": [
+      "Nyhavn"
+     ]
+    },
+    {
+     "name": "Christianshavn",
+     "highlights": [
+      "Christiania",
+      "Vor Frelsers Kirke"
+     ],
+     "free": [
+      "Christiania"
+     ]
+    },
+    {
+     "name": "Vesterbro",
+     "highlights": [
+      "Tivoli Gardens",
+      "Kødbyen"
+     ],
+     "free": [
+      "Kødbyen"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 190,
+   "meal_usd": 30,
+   "transport_day_usd": 12
+  },
+  {
+   "name": "Tokyo",
+   "country": "Japan",
+   "aliases": [
+    "tokio"
+   ],
+   "areas": [
+    {
+     "name": "Asakusa",
+     "highlights": [
+      "Senso-ji",
+      "Nakamise-dori"
+     ],
+     "free": [
+      "Senso-ji",
+      "Nakamise-dori"
+     ]
+    },
+    {
+     "name": "Shibuya",
+     "highlights": [
+      "Shibuya Crossing",
+      "Meiji Jingu"
+     ],
+     "free": [
+      "Shibuya Crossing",
+      "Meiji Jingu"
+     ]
+    },
+    {
+     "name": "Shinjuku",
+     "highlights": [
+      "Shinjuku Gyoen",
+      "Omoide Yokocho"
+     ],
+     "free": [
+      "Omoide Yokocho"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 130,
+   "meal_usd": 12,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Kyoto",
+   "country": "Japan",
+   "aliases": [
+    "kioto"
+   ],
+   "areas": [
+    {
+     "name": "Higashiyama",
+     "highlights": [
+      "Kiyomizu-dera",
+      "Sannenzaka"
+     ],
+     "free": [
+      "Sannenzaka"
+     ]
+    },
+    {
+     "name": "Gion",
+     "highlights": [
+      "Yasaka Shrine",
+      "Hanamikoji Street"
+     ],
+     "free": [
+      "Yasaka Shrine",
+      "Hanamikoji Street"
+     ]
+    },
+    {
+     "name": "Arashiyama",
+     "highlights": [
+      "Arashiyama Bamboo Grove",
+      "Tenryu-ji"
+     ],
+     "free": [
+      "Arashiyama Bamboo Grove"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 120,
+   "meal_usd": 12,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Osaka",
+   "country": "Japan",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Namba",
+     "highlights": [
+      "Dotonbori",
+      "Kuromon Market"
+     ],
+     "free": [
+      "Dotonbori",
+      "Kuromon Market"
+     ]
+    },
+    {
+     "name": "Osakajo",
+     "highlights": [
+      "Osaka Castle",
+      "Nishinomaru Garden"
+     ],
+     "free": []
+    },
+    {
+     "name": "Shinsekai",
+     "highlights": [
+      "Tsutenkaku",
+      "Janjan Yokocho"
+     ],
+     "free": [
+      "Janjan Yokocho"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 100,
+   "meal_usd": 11,
+   "transport_day_usd": 7
+  },
+  {
+   "name": "Seoul",
+   "country": "South Korea",
+   "aliases": [
+    "seul"
+   ],
+   "areas": [
+    {
+     "name": "Jongno",
+     "highlights": [
+      "Gyeongbokgung",
+      "Bukchon Hanok Village"
+     ],
+     "free": [
+      "Bukchon Hanok Village"
+     ]
+    },
+    {
+     "name": "Myeongdong",
+     "highlights": [
+      "Myeongdong street market",
+      "Myeongdong Cathedral"
+     ],
+     "free": [
+      "Myeongdong street market",
+      "Myeongdong Cathedral"
+     ]
+    },
+    {
+     "name": "Hongdae",
+     "highlights": [
+      "Hongdae street performances",
+      "Gyeongui Line Forest Park"
+     ],
+     "free": [
+      "Hongdae street performances",
+      "Gyeongui Line Forest Park"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 100,
+   "meal_usd": 11,
+   "transport_day_usd": 6
+  },
+  {
+   "name": "Bangkok",
+   "country": "Thailand",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Rattanakosin",
+     "highlights": [
+      "Grand Palace",
+      "Wat Pho"
+     ],
+     "free": []
+    },
+    {
+     "name": "Thonburi",
+     "highlights": [
+      "Wat Arun",
+      "Thonburi canals"
+     ],
+     "free": []
+    },
+    {
+     "name": "Yaowarat",
+     "highlights": [
+      "Yaowarat Road street food",
+      "Wat Traimit"
+     ],
+     "free": [
+      "Yaowarat Road street food"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 60,
+   "meal_usd": 5,
+   "transport_day_usd": 4
+  },
+  {
+   "name": "Singapore",
+   "country": "Singapore",
+   "aliases": [
+    "singapur"
+   ],
+   "areas": [
+    {
+     "name": "Marina Bay",
+     "highlights": [
+      "Gardens by the Bay",
+      "Marina Bay Sands SkyPark"
+     ],
+     "free": [
+      "Gardens by the Bay"
+     ]
+    },
+    {
+     "name": "Chinatown",
+     "highlights": [
+      "Maxwell Food Centre",
+      "Buddha Tooth Relic Temple"
+     ],
+     "free": [
+      "Maxwell Food Centre",
+      "Buddha Tooth Relic Temple"
+     ]
+    },
+    {
+     "name": "Kampong Glam",
+     "highlights": [
+      "Sultan Mosque",
+      "Haji Lane"
+     ],
+     "free": [
+      "Sultan Mosque",
+      "Haji Lane"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 180,
+   "meal_usd": 12,
+   "transport_day_usd": 7
+  },
+  {
+   "name": "Hong Kong",
+   "country": "China",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Central",
+     "highlights": [
+      "Peak Tram to Victoria Peak",
+      "Lan Kwai Fong"
+     ],
+     "free": [
+      "Lan Kwai Fong"
+     ]
+    },
+    {
+     "name": "Tsim Sha Tsui",
+     "highlights": [
+      "Star Ferry",
+      "Avenue of Stars"
+     ],
+     "free": [
+      "Avenue of Stars"
+     ]
+    },
+    {
+     "name": "Mong Kok",
+     "highlights": [
+      "Ladies' Market",
+      "Flower Market Road"
+     ],
+     "free": [
+      "Ladies' Market",
+      "Flower Market Road"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 150,
+   "meal_usd": 12,
+   "transport_day_usd": 7
+  },
+  {
+   "name": "Hanoi",
+   "country": "Vietnam",
+   "aliases": [
+    "hanoi",
+    "ha noi"
+   ],
+   "areas": [
+    {
+     "name": "Hoàn Kiếm",
+     "highlights": [
+      "Hoàn Kiếm Lake",
+      "Ngọc Sơn Temple"
+     ],
+     "free": [
+      "Hoàn Kiếm Lake"
+     ]
+    },
+    {
+     "name": "French Quarter",
+     "highlights": [
+      "Hanoi Opera House",
+      "Vietnamese Women's Museum"
+     ],
+     "free": []
+    },
+    {
+     "name": "Ba Đình",
+     "highlights": [
+      "Hồ Chí Minh Mausoleum",
+      "One Pillar Pagoda"
+     ],
+     "free": [
+      "Hồ Chí Minh Mausoleum",
+      "One Pillar Pagoda"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 45,
+   "meal_usd": 4,
+   "transport_day_usd": 3
+  },
+  {
+   "name": "Ho Chi Minh City",
+   "country": "Vietnam",
+   "aliases": [
+    "ciudad ho chi minh",
+    "saigon",
+    "hcmc"
+   ],
+   "areas": [
+    {
+     "name": "District 1",
+     "highlights": [
+      "Bến Thành Market",
+      "Saigon Notre-Dame Cathedral"
+     ],
+     "free": [
+      "Bến Thành Market",
+      "Saigon Notre-Dame Cathedral"
+     ]
+    },
+    {
+     "name": "District 3",
+     "highlights": [
+      "War Remnants Museum",
+      "Tân Định Church"
+     ],
+     "free": [
+      "Tân Định Church"
+     ]
+    },
+    {
+     "name": "Chợ Lớn",
+     "highlights": [
+      "Bình Tây Market",
+      "Thiên Hậu Temple"
+     ],
+     "free": [
+      "Bình Tây Market",
+      "Thiên Hậu Temple"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 50,
+   "meal_usd": 4,
+   "transport_day_usd": 3
+  },
+  {
+   "name": "Taipei",
+   "country": "Taiwan",
+   "aliases": [
+    "taipei"
+   ],
+   "areas": [
+    {
+     "name": "Xinyi",
+     "highlights": [
+      "Taipei 101",
+      "Elephant Mountain"
+     ],
+     "free": [
+      "Elephant Mountain"
+     ]
+    },
+    {
+     "name": "Wanhua",
+     "highlights": [
+      "Longshan Temple",
+      "Ximending"
+     ],
+     "free": [
+      "Longshan Temple",
+      "Ximending"
+     ]
+    },
+    {
+     "name": "Shilin",
+     "highlights": [
+      "Shilin Night Market",
+      "National Palace Museum"
+     ],
+     "free": [
+      "Shilin Night Market"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 90,
+   "meal_usd": 8,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "New York",
+   "country": "United States",
+   "aliases": [
+    "nueva york",
+    "new york city",
+    "nyc"
+   ],
+   "areas": [
+    {
+     "name": "Midtown Manhattan",
+     "highlights": [
+      "Empire State Building",
+      "Rockefeller Center"
+     ],
+     "free": [
+      "Rockefeller Center"
+     ]
+    },
+    {
+     "name": "Lower Manhattan",
+     "highlights": [
+      "9/11 Memorial",
+      "Statue of Liberty ferry"
+     ],
+     "free": [
+      "9/11 Memorial"
+     ]
+    },
+    {
+     "name": "Upper East Side",
+     "highlights": [
+      "The Metropolitan Museum of Art",
+      "Central Park"
+     ],
+     "free": [
+      "Central Park"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 280,
+   "meal_usd": 30,
+   "transport_day_usd": 10
+  },
+  {
+   "name": "San Francisco",
+   "country": "United States",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Fisherman's Wharf",
+     "highlights": [
+      "Pier 39",
+      "Alcatraz ferry"
+     ],
+     "free": [
+      "Pier 39"
+     ]
+    },
+    {
+     "name": "Presidio",
+     "highlights": [
+      "Golden Gate Bridge",
+      "Crissy Field"
+     ],
+     "free": [
+      "Golden Gate Bridge",
+      "Crissy Field"
+     ]
+    },
+    {
+     "name": "Mission District",
+     "highlights": [
+      "Mission Dolores",
+      "Clarion Alley murals"
+     ],
+     "free": [
+      "Clarion Alley murals"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 250,
+   "meal_usd": 30,
+   "transport_day_usd": 10
+  },
+  {
+   "name": "Los Angeles",
+   "country": "United States",
+   "aliases": [
+    "los angeles"
+   ],
+   "areas": [
+    {
+     "name": "Hollywood",
+     "highlights": [
+      "Hollywood Walk of Fame",
+      "TCL Chinese Theatre"
+     ],
+     "free": [
+      "Hollywood Walk of Fame"
+     ]
+    },
+    {
+     "name": "Santa Monica",
+     "highlights": [
+      "Santa Monica Pier",
+      "Third Street Promenade"
+     ],
+     "free": [
+      "Santa Monica Pier",
+      "Third Street Promenade"
+     ]
+    },
+    {
+     "name": "Downtown LA",
+     "highlights": [
+      "Grand Central Market",
+      "Walt Disney Concert Hall"
+     ],
+     "free": [
+      "Grand Central Market"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 220,
+   "meal_usd": 25,
+   "transport_day_usd": 15
+  },
+  {
+   "name": "Mexico City",
+   "country": "Mexico",
+   "aliases": [
+    "ciudad de mexico",
+    "cdmx",
+    "mexico df"
+   ],
+   "areas": [
+    {
+     "name": "Centro Histórico",
+     "highlights": [
+      "Zócalo",
+      "Palacio de Bellas Artes"
+     ],
+     "free": [
+      "Zócalo"
+     ]
+    },
+    {
+     "name": "Coyoacán",
+     "highlights": [
+      "Museo Frida Kahlo",
+      "Jardín Centenario"
+     ],
+     "free": [
+      "Jardín Centenario"
+     ]
+    },
+    {
+     "name": "Chapultepec",
+     "highlights": [
+      "Museo Nacional de Antropología",
+      "Castillo de Chapultepec"
+     ],
+     "free": []
+    }
+   ],
+   "lodging_room_night_usd": 80,
+   "meal_usd": 10,
+   "transport_day_usd": 3
+  },
+  {
+   "name": "Buenos Aires",
+   "country": "Argentina",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Recoleta",
+     "highlights": [
+      "Cementerio de la Recoleta",
+      "Museo Nacional de Bellas Artes"
+     ],
+     "free": [
+      "Museo Nacional de Bellas Artes"
+     ]
+    },
+    {
+     "name": "San Telmo",
+     "highlights": [
+      "Feria de San Telmo",
+      "Mercado de San Telmo"
+     ],
+     "free": [
+      "Feria de San Telmo",
+      "Mercado de San Telmo"
+     ]
+    },
+    {
+     "name": "La Boca",
+     "highlights": [
+      "Caminito",
+      "La Bombonera"
+     ],
+     "free": [
+      "Caminito"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 70,
+   "meal_usd": 12,
+   "transport_day_usd": 3
+  },
+  {
+   "name": "Rio de Janeiro",
+   "country": "Brazil",
+   "aliases": [
+    "rio de janeiro",
+    "rio"
+   ],
+   "areas": [
+    {
+     "name": "Copacabana",
+     "highlights": [
+      "Praia de Copacabana",
+      "Forte de Copacabana"
+     ],
+     "free": [
+      "Praia de Copacabana"
+     ]
+    },
+    {
+     "name": "Urca",
+     "highlights": [
+      "Pão de Açúcar",
+      "Praia Vermelha"
+     ],
+     "free": [
+      "Praia Vermelha"
+     ]
+    },
+    {
+     "name": "Cosme Velho",
+     "highlights": [
+      "Cristo Redentor",
+      "Largo do Boticário"
+     ],
+     "free": [
+      "Largo do Boticário"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 90,
+   "meal_usd": 12,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Lima",
+   "country": "Peru",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Miraflores",
+     "highlights": [
+      "Huaca Pucllana",
+      "Malecón de Miraflores"
+     ],
+     "free": [
+      "Malecón de Miraflores"
+     ]
+    },
+    {
+     "name": "Barranco",
+     "highlights": [
+      "Puente de los Suspiros",
+      "MAC Lima"
+     ],
+     "free": [
+      "Puente de los Suspiros"
+     ]
+    },
+    {
+     "name": "Centro Histórico",
+     "highlights": [
+      "Plaza Mayor",
+      "Convento de San Francisco"
+     ],
+     "free": [
+      "Plaza Mayor"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 70,
+   "meal_usd": 10,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Cusco",
+   "country": "Peru",
+   "aliases": [
+    "cuzco"
+   ],
+   "areas": [
+    {
+     "name": "Centro Histórico",
+     "highlights": [
+      "Plaza de Armas",
+      "Qorikancha"
+     ],
+     "free": [
+      "Plaza de Armas"
+     ]
+    },
+    {
+     "name": "San Blas",
+     "highlights": [
+      "Iglesia de San Blas",
+      "Mirador de San Blas"
+     ],
+     "free": [
+      "Mirador de San Blas"
+     ]
+    },
+    {
+     "name": "San Pedro",
+     "highlights": [
+      "Mercado San Pedro",
+      "Iglesia de San Pedro"
+     ],
+     "free": [
+      "Mercado San Pedro"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 60,
+   "meal_usd": 8,
+   "transport_day_usd": 4
+  },
+  {
+   "name": "Bogotá",
+   "country": "Colombia",
+   "aliases": [
+    "bogota"
+   ],
+   "areas": [
+    {
+     "name": "La Candelaria",
+     "highlights": [
+      "Museo Botero",
+      "Plaza de Bolívar"
+     ],
+     "free": [
+      "Museo Botero",
+      "Plaza de Bolívar"
+     ]
+    },
+    {
+     "name": "Chapinero",
+     "highlights": [
+      "Parque de la 93",
+      "Zona G"
+     ],
+     "free": [
+      "Parque de la 93",
+      "Zona G"
+     ]
+    },
+    {
+     "name": "Usaquén",
+     "highlights": [
+      "Mercado de las Pulgas de Usaquén",
+      "Parque de Usaquén"
+     ],
+     "free": [
+      "Mercado de las Pulgas de Usaquén",
+      "Parque de Usaquén"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 60,
+   "meal_usd": 8,
+   "transport_day_usd": 3
+  },
+  {
+   "name": "Cartagena",
+   "country": "Colombia",
+   "aliases": [
+    "cartagena de indias"
+   ],
+   "areas": [
+    {
+     "name": "Ciudad Amurallada",
+     "highlights": [
+      "Las Murallas",
+      "Plaza de Santo Domingo"
+     ],
+     "free": [
+      "Las Murallas",
+      "Plaza de Santo Domingo"
+     ]
+    },
+    {
+     "name": "Getsemaní",
+     "highlights": [
+      "Plaza de la Trinidad",
+      "Getsemaní street art"
+     ],
+     "free": [
+      "Plaza de la Trinidad",
+      "Getsemaní street art"
+     ]
+    },
+    {
+     "name": "San Lázaro",
+     "highlights": [
+      "Castillo San Felipe de Barajas"
+     ],
+     "free": []
+    }
+   ],
+   "lodging_room_night_usd": 90,
+   "meal_usd": 12,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Quito",
+   "country": "Ecuador",
+   "aliases": [],
+   "areas": [
+    {
+     "name": "Centro Histórico",
+     "highlights": [
+      "Basílica del Voto Nacional",
+      "Iglesia de la Compañía de Jesús"
+     ],
+     "free": []
+    },
+    {
+     "name": "La Mariscal",
+     "highlights": [
+      "Plaza Foch",
+      "Mercado Artesanal La Mariscal"
+     ],
+     "free": [
+      "Plaza Foch",
+      "Mercado Artesanal La Mariscal"
+     ]
+    },
+    {
+     "name": "Guápulo",
+     "highlights": [
+      "Iglesia de Guápulo",
+      "Mirador de Guápulo"
+     ],
+     "free": [
+      "Iglesia de Guápulo",
+      "Mirador de Guápulo"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 55,
+   "meal_usd": 8,
+   "transport_day_usd": 3
+  },
+  {
+   "name": "Marrakech",
+   "country": "Morocco",
+   "aliases": [
+    "marrakesh",
+    "marrakech"
+   ],
+   "areas": [
+    {
+     "name": "Medina",
+     "highlights": [
+      "Jemaa el-Fnaa",
+      "Koutoubia Mosque"
+     ],
+     "free": [
+      "Jemaa el-Fnaa",
+      "Koutoubia Mosque"
+     ]
+    },
+    {
+     "name": "Gueliz",
+     "highlights": [
+      "Jardin Majorelle",
+      "Musée Yves Saint Laurent"
+     ],
+     "free": []
+    },
+    {
+     "name": "Kasbah",
+     "highlights": [
+      "Saadian Tombs",
+      "El Badi Palace"
+     ],
+     "free": []
+    }
+   ],
+   "lodging_room_night_usd": 70,
+   "meal_usd": 10,
+   "transport_day_usd": 5
+  },
+  {
+   "name": "Cape Town",
+   "country": "South Africa",
+   "aliases": [
+    "ciudad del cabo"
+   ],
+   "areas": [
+    {
+     "name": "City Bowl",
+     "highlights": [
+      "Table Mountain",
+      "Bo-Kaap"
+     ],
+     "free": [
+      "Bo-Kaap"
+     ]
+    },
+    {
+     "name": "V&A Waterfront",
+     "highlights": [
+      "Robben Island ferry",
+      "Zeitz MOCAA"
+     ],
+     "free": []
+    },
+    {
+     "name": "Newlands",
+     "highlights": [
+      "Kirstenbosch",
+      "Newlands Forest"
+     ],
+     "free": [
+      "Newlands Forest"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 90,
+   "meal_usd": 12,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Dubai",
+   "country": "United Arab Emirates",
+   "aliases": [
+    "dubai"
+   ],
+   "areas": [
+    {
+     "name": "Downtown Dubai",
+     "highlights": [
+      "Burj Khalifa",
+      "Dubai Mall"
+     ],
+     "free": [
+      "Dubai Mall"
+     ]
+    },
+    {
+     "name": "Deira",
+     "highlights": [
+      "Gold Souk",
+      "Spice Souk"
+     ],
+     "free": [
+      "Gold Souk",
+      "Spice Souk"
+     ]
+    },
+    {
+     "name": "Dubai Marina",
+     "highlights": [
+      "Marina Walk",
+      "JBR Beach"
+     ],
+     "free": [
+      "Marina Walk",
+      "JBR Beach"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 150,
+   "meal_usd": 20,
+   "transport_day_usd": 8
+  },
+  {
+   "name": "Sydney",
+   "country": "Australia",
+   "aliases": [
+    "sidney",
+    "sydney"
+   ],
+   "areas": [
+    {
+     "name": "The Rocks",
+     "highlights": [
+      "Sydney Harbour Bridge",
+      "The Rocks Markets"
+     ],
+     "free": [
+      "Sydney Harbour Bridge",
+      "The Rocks Markets"
+     ]
+    },
+    {
+     "name": "Circular Quay",
+     "highlights": [
+      "Sydney Opera House",
+      "Royal Botanic Garden"
+     ],
+     "free": [
+      "Sydney Opera House",
+      "Royal Botanic Garden"
+     ]
+    },
+    {
+     "name": "Bondi",
+     "highlights": [
+      "Bondi Beach",
+      "Bondi to Coogee coastal walk"
+     ],
+     "free": [
+      "Bondi Beach",
+      "Bondi to Coogee coastal walk"
+     ]
+    }
+   ],
+   "lodging_room_night_usd": 170,
+   "meal_usd": 22,
+   "transport_day_usd": 10
+  }
+ ]
+}

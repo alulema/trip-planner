@@ -1,0 +1,9 @@
+# CI override: cap resources like the production pod (≤ 2 vCPU / 4 GiB in total,
+# biased to inference) so the measured latency is representative.
+services:
+  ollama:
+    cpus: 1.75
+    mem_limit: 3g
+  app:
+    cpus: 0.25
+    mem_limit: 1g
