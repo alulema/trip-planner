@@ -63,6 +63,16 @@ def test_rate_limit_per_ip(client):
     assert parse_sse(other.text)[-1][0] == "done"
 
 
+def test_rate_limit_prefers_cf_connecting_ip(client):
+    app.state.admission = Admission(per_ip_per_hour=1, global_per_hour=100, max_concurrent=3)
+    first = {"cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "198.51.100.1"}
+    assert parse_sse(client.get("/api/plan-trip/stream", params=PARAMS, headers=first).text)[-1][0] == "done"
+    # A forged X-Forwarded-For doesn't dodge the limit while CF-Connecting-IP is the same.
+    forged = {"cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "192.0.2.77"}
+    events = parse_sse(client.get("/api/plan-trip/stream", params=PARAMS, headers=forged).text)
+    assert events[0][0] == "error" and events[0][1]["code"] == "rate_limited"
+
+
 def test_sliding_window_expires():
     lim = SlidingWindowLimiter(1, window_seconds=10)
     assert lim.check_and_record("k", now=0)

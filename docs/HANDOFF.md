@@ -18,7 +18,7 @@ Notas:
 
 - Guardrails de la app: 6000 tokens/viaje, 1 cadena concurrente, 10 viajes/h por IP, 30/h global,
   timeout 180 s. Tunables por env sin rebuild (tabla en `README.md`).
-- La app lee `X-Forwarded-For` (primer valor) para el rate limit por IP.
+- Rate limit por IP: la app usa `CF-Connecting-IP` (lo fija Cloudflare) y, si falta, el primer valor de `X-Forwarded-For`.
 - Variable opcional `OLLAMA_MODEL` si se cambia el modelo horneado (p.ej. `qwen2.5:0.5b-instruct`
   para más velocidad; requiere rebuild de la imagen ollama con `--build-arg OLLAMA_MODEL=...`).
 - Cold start: la imagen ollama pesa ~2–3 GB; presupuestar el pull en la provisión.
@@ -32,4 +32,5 @@ Notas:
 | Salidas estructuradas (structured outputs) | Modo de un LLM en que la respuesta se restringe a un esquema JSON dado, de modo que siempre sea parseable. | https://en.wikipedia.org/wiki/JSON#Schema |
 | Rate limiting | Técnica que limita cuántas solicitudes puede hacer un cliente en un intervalo de tiempo, para proteger un servicio de abuso o sobrecosto. | https://en.wikipedia.org/wiki/Rate_limiting |
 | Motor de decisiones / System One | Modelo que, en lugar de generar texto, evalúa un estado y devuelve respuestas tipadas (una opción, un sí/no) con su probabilidad. | https://en.wikipedia.org/wiki/Thinking,_Fast_and_Slow |
-| Ollama | Servidor open source para ejecutar modelos de lenguaje localmente, sin depender de una API externa. | https://es.wikipedia.org/wiki/Modelo_de_lenguaje_grande (sin página propia; enlace al concepto — verificar) |
+| Ollama | Servidor open source para ejecutar modelos de lenguaje localmente, sin depender de una API externa. | https://en.wikipedia.org/wiki/Ollama |
+| LangGraph | Biblioteca open source para orquestar agentes de LLM como un grafo de estados: nodos, aristas condicionales y un estado compartido. | https://en.wikipedia.org/wiki/LangChain (sin página propia; el artículo de LangChain la menciona) |

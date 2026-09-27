@@ -21,7 +21,7 @@ def category(interest):
 @pytest.mark.parametrize("interest,expected", [
     ("ramen", "food"), ("Gastronomía", "food"), ("templos", "religion_heritage"),
     ("museos", "history_museums"), ("senderismo", "nature_outdoors"), ("vida nocturna", "nightlife"),
-    ("xyzzy", "other"),
+    ("centro histórico", "history_museums"), ("historic center", "history_museums"), ("xyzzy", "other"),
 ])
 def test_interest_classification(interest, expected):
     ans = category(interest)
