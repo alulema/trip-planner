@@ -35,12 +35,8 @@ SCENARIOS = [
 
 GENERIC = {"market", "mercado", "temple", "templo", "street", "museum", "museo", "cathedral", "catedral",
            "church", "iglesia", "palace", "palacio", "garden", "gardens", "jardin", "plaza", "square", "tower",
-           "bridge", "puente", "park", "parque", "street", "food", "shrine", "basilica", "mosque", "night"}
-
-
-def _tokens(name: str) -> set[str]:
-    words = re.findall(r"[\w'-]+", _fold(name))
-    return {w for w in words if len(w) >= 5 and w not in GENERIC}
+           "bridge", "puente", "park", "parque", "food", "shrine", "santuario", "basilica", "mosque", "night",
+           "house", "casa", "lake", "lago", "visit", "visita", "walk", "paseo", "free", "tour", "view", "mirador"}
 
 
 def _fold(text: str) -> str:
@@ -49,27 +45,39 @@ def _fold(text: str) -> str:
     return "".join(c for c in text if not unicodedata.combining(c))
 
 
+def _stems(text: str) -> set[str]:
+    """Distinctive word stems (first 5 letters), so "Vietnamese"/"Vietnamienses" or a short
+    name like "Ngọc" still match; generic words ("museum", "temple") prove nothing."""
+    words = re.findall(r"[a-z0-9']+", _fold(text))
+    return {w[:5] for w in words if len(w) >= 4 and w not in GENERIC}
+
+
 def highlight_placement(ctx: dict) -> tuple[int, int, list[str]]:
-    """(highlights mentioned on their own day, highlights planned, misplaced mentions)."""
+    """(highlights mentioned in their own day's activities, highlights checkable, misplaced).
+
+    Only the activities count (not the free alternative), and words shared with the city or an
+    area name are ignored — they appear everywhere and prove nothing."""
     by_area = ctx["destination_research"].get("area_highlights") or {}
+    city = _stems(ctx["user_request"]["destination"])
     days = ctx["itinerary_draft"]["days"]
     used = planned = 0
     misplaced = []
     seen_areas = set()
     for d in days:
-        text = _fold(" ".join(d["activities"] + [d.get("free_alternative", "")]))
-        words = set(re.findall(r"[\w'-]+", text))
+        words = _stems(" ".join(d["activities"]))
+        own = _stems(d["area"]) | city
         if d["area"] in by_area and d["area"] not in seen_areas:
             seen_areas.add(d["area"])
             for h in by_area[d["area"]]:
-                planned += 1
-                used += bool((_tokens(h) - _tokens(d["area"])) & words)
+                key = _stems(h) - own
+                if key:  # e.g. "Hoàn Kiếm Lake" has nothing distinctive beyond the area name
+                    planned += 1
+                    used += bool(key & words)
         for area, hs in by_area.items():
             if area == d["area"]:
                 continue
-            # Ignore words shared with an area name ("Arashiyama" Bamboo Grove), they prove nothing.
             misplaced += [f"day {d['day']} ({d['area']}): {h}" for h in hs
-                          if (_tokens(h) - _tokens(area) - _tokens(d["area"])) & words]
+                          if (_stems(h) - _stems(area) - own) & words]
     return used, planned, misplaced
 
 

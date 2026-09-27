@@ -32,7 +32,9 @@ same day number and the same area.
   experiences for the whole group (not lodging, meals or transport). Museums, temples, tours
   and shows usually charge; typical city days cost about 10 to 60 USD per person.
 - free_alternative: one free activity in the same area that could replace the paid ones.
-Match the activities to the traveller's interests."""
+Match the activities to the traveller's interests.
+Write every activity in the requested language; keep the place names from day_plan exactly
+as written (do not translate them, do not switch to another language around them)."""
 
 # Words that suggest an activity costs nothing (kept when paid ones are swapped out).
 FREE_HINTS = ("free", "gratis", "gratuit", "walk", "paseo", "caminar", "stroll", "park", "parque",
@@ -75,6 +77,15 @@ def day_plan(ctx: SharedContext) -> list[dict]:
     return plan
 
 
+def free_alternative(ctx: SharedContext, area: str, generated: str) -> str:
+    """For catalog cities the free fallback is written by code and anchored to the day's area:
+    when the budget loop swaps it in, the model can't send every day to the same district
+    (seen in a real run: "Explore Alfama's streets" for Baixa, Alfama and Belém)."""
+    if ctx.destination_research is not None and ctx.destination_research.source == "catalog":
+        return f"Paseo libre por {area}" if ctx.user_request.lang == "es" else f"Free walk around {area}"
+    return generated.strip()
+
+
 def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDraft:
     """Force the draft into shape (exactly `days` entries, sane costs) and derive the daily
     cost assumptions from the research reference costs — arithmetic stays in code."""
@@ -95,7 +106,7 @@ def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDra
             area=plan[n - 1]["area"],  # the plan decides the area, not the model
             activities=[a.strip() for a in src.activities if a.strip()][:4],
             estimated_cost_usd=round(min(max_day_cost, max(0.0, src.estimated_cost_usd)), 2),
-            free_alternative=src.free_alternative.strip(),
+            free_alternative=free_alternative(ctx, plan[n - 1]["area"], src.free_alternative),
         ))
     return ItineraryDraft(
         days=days,

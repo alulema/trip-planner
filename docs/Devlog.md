@@ -263,3 +263,22 @@ colocaba en el barrio equivocado. Cambios:
    plan** aunque el modelo devuelva otra.
 3. E2E: métrica "imperdibles usados en su día" y detector de imperdibles en el área equivocada
    (warning).
+
+### E2E run 36287278025 (tras asociar atracciones y barrios)
+
+Kioto: cada día usó las atracciones de su barrio (antes: Shibuya/Kinkaku-ji fuera de sitio).
+Problemas: (a) en Lisboa $50, el recorte `free_alternatives` puso "Explore Alfama's streets" en
+los 3 días — la alternativa gratuita la seguía escribiendo el modelo sin anclaje al área;
+(b) mezcla de idiomas ("Visit to the Yasaka Shrine" en un viaje en español); (c) la métrica
+subcontaba (Hanói, nombres traducidos/cortos) y daba falsos "mal ubicado" (contaba la
+alternativa gratuita). Latencia 50–63 s con tokens iguales → runner más lento, no el cambio.
+
+## 2026-09-27 — Sesión 3d: alternativa gratuita por código, idioma y métrica
+
+1. Ciudades del catálogo: `free_alternative` = "Paseo libre por {área}" (código). Tras el
+   recorte, cada día sigue apuntando a su barrio. Fuera del catálogo se conserva la del modelo.
+2. Prompt del itinerario: todo en el idioma pedido, nombres de lugares tal cual del plan.
+3. Métrica del e2e: solo actividades; raíces de 5 letras (reconoce "Vietnamienses", "Ngọc");
+   ignora palabras del nombre de la ciudad/área; excluye del denominador atracciones sin
+   palabras distintivas ("Hoàn Kiếm Lake"). Sobre los datos del run anterior: Hanói 2/3,
+   Kioto 5/6 (faltó Hanamikoji de verdad), sin falsos positivos.

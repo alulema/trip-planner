@@ -248,3 +248,21 @@ def test_model_cannot_move_a_day_to_another_area():
     ctx = make_ctx(budget_usd=5000, destination="Kioto", days=3)
     asyncio.run(run_chain(ctx, llm=WrongAreaLLM(0)))
     assert [d.area for d in ctx.itinerary_draft.days] == ["Higashiyama", "Gion", "Arashiyama"]
+
+
+def test_catalog_free_alternative_is_written_by_code_for_its_own_area():
+    # Reproduces e2e run 36287278025: the model's free alternative sent Baixa and Belém days to Alfama.
+    ctx = make_ctx(budget_usd=50, destination="Lisboa", days=3, lang="en")
+    asyncio.run(run_chain(ctx))
+    days = ctx.itinerary_draft.days
+    assert [d.area for d in days] == ["Baixa", "Alfama", "Belém"]
+    assert [d.free_alternative for d in days] == [f"Free walk around {a}" for a in ("Baixa", "Alfama", "Belém")]
+    assert "free_alternatives" in ctx.conflict_resolution.applied_action_ids
+    for d in days:  # after the swap, each day still points at its own district
+        assert d.activities[0] == f"Free walk around {d.area}"
+
+
+def test_model_path_keeps_the_generated_free_alternative():
+    ctx = make_ctx(budget_usd=5000, destination="Valparaíso", lang="en")
+    asyncio.run(run_chain(ctx))
+    assert ctx.itinerary_draft.days[0].free_alternative.startswith("Free walking route around")
