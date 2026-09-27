@@ -24,11 +24,20 @@ DATA = Path(__file__).resolve().parent / "data" / "cities.json"
 class City:
     name: str
     country: str
-    areas: tuple[str, ...]
-    highlights: tuple[str, ...]
+    # (area, highlights located in that area) — the pairing is what keeps a small model from
+    # placing a landmark in the wrong district.
+    area_highlights: tuple[tuple[str, tuple[str, ...]], ...]
     lodging_room_night_usd: float
     meal_usd: float
     transport_day_usd: float
+
+    @property
+    def areas(self) -> tuple[str, ...]:
+        return tuple(a for a, _ in self.area_highlights)
+
+    @property
+    def highlights(self) -> tuple[str, ...]:
+        return tuple(h for _, hs in self.area_highlights for h in hs)
 
 
 @lru_cache(maxsize=1)
@@ -36,7 +45,8 @@ def _index() -> tuple[dict[str, City], tuple[str, ...]]:
     raw = json.loads(DATA.read_text(encoding="utf-8"))
     index: dict[str, City] = {}
     for c in raw["cities"]:
-        city = City(c["name"], c["country"], tuple(c["areas"]), tuple(c["highlights"]),
+        city = City(c["name"], c["country"],
+                    tuple((a["name"], tuple(a["highlights"])) for a in c["areas"]),
                     c["lodging_room_night_usd"], c["meal_usd"], c["transport_day_usd"])
         for key in (c["name"], *c["aliases"]):
             index[normalize(key)] = city

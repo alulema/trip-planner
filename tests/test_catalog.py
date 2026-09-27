@@ -21,8 +21,12 @@ def test_catalog_data_is_well_formed():
     for c in raw["cities"]:
         assert c["name"] not in names
         names.add(c["name"])
-        assert len(c["areas"]) == 3 and all("(" not in a and " - " not in a for a in c["areas"])
-        assert len(c["highlights"]) >= 3
+        assert len(c["areas"]) == 3
+        for area in c["areas"]:
+            assert "(" not in area["name"] and " - " not in area["name"]
+            assert 1 <= len(area["highlights"]) <= 3, (c["name"], area["name"])
+        highlights = [h for a in c["areas"] for h in a["highlights"]]
+        assert len(highlights) == len(set(highlights)), c["name"]  # a place lives in one area only
         assert 20 <= c["lodging_room_night_usd"] <= 400
         assert 2 <= c["meal_usd"] <= 60
         assert 1 <= c["transport_day_usd"] <= 30

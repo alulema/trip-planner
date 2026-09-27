@@ -232,3 +232,34 @@ Kioto, cortó el JSON dos veces (`done=length`) y la cadena falló (`chain_faile
 pasó en el mismo commit por azar (el modelo no es determinista). Arreglo: 200 tokens + "máx. 25
 palabras" en el prompt, y **si la nota de temporada falla, se usa un texto genérico**: los hechos
 del catálogo no dependen del modelo. Tests de regresión añadidos.
+
+### Benchmark 1.5B vs 3B (run 36282549941)
+
+| Escenario | 1.5B (e2e CI) | 3B |
+|---|---|---|
+| Kioto (catálogo) | 31 s | 71 s |
+| Lisboa $50 (catálogo) | 21 s | 68 s |
+| Hanói (catálogo) | 25 s | 56 s |
+| Valparaíso (modelo) | 23 s | 75 s |
+
+El 3B duplica la latencia (itinerario 35–47 s) y **no** mejora la geografía: Kinkaku-ji en Gion,
+"Ribeira" (Oporto) en Lisboa, "Paseo Alcorta" (Buenos Aires) en Valparaíso, lugares inventados,
+"Day 4/5" en un viaje de 3 días. Solo los costos fuera del catálogo son algo más creíbles.
+**Decisión: quedarse con 1.5B + catálogo.**
+
+## 2026-09-27 — Sesión 3c: atracciones asociadas a su barrio
+
+Problema restante con el catálogo: el modelo recibía una lista suelta de imperdibles y los
+colocaba en el barrio equivocado. Cambios:
+
+1. `cities.json` v2026-09b: cada área lleva sus propios imperdibles (1–3), elegidos para estar
+   físicamente en ese barrio. Se reemplazaron áreas donde el imperdible famoso no caía dentro
+   (p.ej. Kioto: Higashiyama → Kiyomizu-dera/Sannenzaka, Gion → Yasaka/Hanamikoji,
+   Arashiyama → Bosque de bambú/Tenryu-ji; Lisboa: Bairro Alto → Belém). Test: ningún
+   imperdible aparece en dos áreas.
+2. `day_plan()` (código): asigna el área de cada día (round-robin) y adjunta solo los
+   imperdibles de esa área; en una segunda visita al área no se repiten. El prompt del
+   itinerario recibe ese plan en vez de listas sueltas, y la normalización **impone el área del
+   plan** aunque el modelo devuelva otra.
+3. E2E: métrica "imperdibles usados en su día" y detector de imperdibles en el área equivocada
+   (warning).

@@ -177,7 +177,7 @@ def test_catalog_destination_uses_curated_facts_and_the_model_only_for_the_seaso
     r = ctx.destination_research
     assert r.source == "catalog"
     assert r.recommended_areas == ["Higashiyama", "Gion", "Arashiyama"]
-    assert "Fushimi Inari Taisha" in r.highlights
+    assert r.area_highlights["Gion"] == ["Yasaka Shrine", "Hanamikoji Street"]
     assert r.reference_costs.lodging_per_night_usd == 240  # 2 rooms for 3 travelers
     assert any(d.get("message", "").startswith("source: catalog") for d in traces(events, "completed"))
     assert {d.area for d in ctx.itinerary_draft.days} <= set(r.recommended_areas)
@@ -217,3 +217,34 @@ def test_catalog_city_survives_a_failed_season_note():
 def test_unknown_city_still_fails_cleanly_when_research_breaks():
     with pytest.raises(ChainError):
         asyncio.run(run_chain(make_ctx(destination="Valparaíso"), llm=BrokenJsonLLM(0)))
+
+
+def test_day_plan_pairs_each_day_with_its_area_and_highlights():
+    from app.agents.itinerary_planning import day_plan
+
+    ctx = make_ctx(budget_usd=5000, destination="Kioto", days=4)
+    asyncio.run(run_chain(ctx))
+    plan = day_plan(ctx)
+    assert [d["area"] for d in plan] == ["Higashiyama", "Gion", "Arashiyama", "Higashiyama"]
+    assert plan[1]["highlights"] == ["Yasaka Shrine", "Hanamikoji Street"]
+    assert "highlights" not in plan[3]  # a revisit explores other spots, no repeated landmarks
+    # The plan, not the model, decides where each day goes.
+    assert [d.area for d in ctx.itinerary_draft.days] == [d["area"] for d in plan]
+
+
+class WrongAreaLLM(MockLLM):
+    """The model returns days in the wrong areas (what Qwen did: Kinkaku-ji in Gion)."""
+
+    async def complete_json(self, *, agent, output_model, mock, **kw):
+        if agent != "itinerary_planning":
+            return await super().complete_json(agent=agent, output_model=output_model, mock=mock, **kw)
+        out = mock()
+        for d in out.days:
+            d.area = "Shibuya"
+        return await super().complete_json(agent=agent, output_model=output_model, mock=lambda: out, **kw)
+
+
+def test_model_cannot_move_a_day_to_another_area():
+    ctx = make_ctx(budget_usd=5000, destination="Kioto", days=3)
+    asyncio.run(run_chain(ctx, llm=WrongAreaLLM(0)))
+    assert [d.area for d in ctx.itinerary_draft.days] == ["Higashiyama", "Gion", "Arashiyama"]

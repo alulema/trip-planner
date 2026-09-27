@@ -8,7 +8,6 @@ assumptions) without generating anything — "generate once, decide many times".
 from __future__ import annotations
 
 from ..decisions.rules import normalize
-from .destination_research import clean_area
 from ..decisions.taxonomy import FOOD_CUT, FREE_ALTERNATIVE_COST_USD, LODGING_CUT, TRANSPORT_CUT
 from ..guardrails import TokenBudget
 from ..llm_client import LLMClient, OnProgress
@@ -24,16 +23,16 @@ from ..models import (
 from . import compact, language_rule
 
 SYSTEM = """You are an itinerary planning agent. Reply with JSON only.
-Plan the trip day by day for the traveller's interests, grouping activities by area.
-Rules:
-- One entry per day, numbered from 1, for exactly the requested number of days.
-- area: one of the given areas, written exactly as given.
-- activities: 2 or 3 short, concrete activities (max 8 words each) in that area.
+Write the trip day by day following day_plan exactly: one entry per planned day, with the
+same day number and the same area.
+- activities: 2 or 3 short, concrete activities (max 8 words each) in that day's area. If the
+  day lists highlights, build the activities around them using their exact names; never move
+  a place to another day's area.
 - estimated_cost_usd: realistic total for that day's tickets, entrance fees, tours and paid
   experiences for the whole group (not lodging, meals or transport). Museums, temples, tours
   and shows usually charge; typical city days cost about 10 to 60 USD per person.
 - free_alternative: one free activity in the same area that could replace the paid ones.
-If known_highlights are given, build the days around them, using their exact names."""
+Match the activities to the traveller's interests."""
 
 # Words that suggest an activity costs nothing (kept when paid ones are swapped out).
 FREE_HINTS = ("free", "gratis", "gratuit", "walk", "paseo", "caminar", "stroll", "park", "parque",
@@ -47,11 +46,9 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
     assert research is not None, "destination research must run first"
     user = compact({
         "destination": req.destination,
-        "days": req.days,
         "group_size": req.travelers,
         "interests": req.interests,
-        "areas": research.recommended_areas,
-        **({"known_highlights": research.highlights} if research.highlights else {}),
+        "day_plan": day_plan(ctx),
     }) + "\n" + language_rule(req)
 
     out, usage = await llm.complete_json(
@@ -61,12 +58,30 @@ async def run(ctx: SharedContext, llm: LLMClient, budget: TokenBudget,
     return _normalize(out, ctx), usage
 
 
+def day_plan(ctx: SharedContext) -> list[dict]:
+    """Which area each day visits, decided by code (round-robin over the research areas), plus
+    the highlights that are really in that area when the catalog knows them. A revisit of an
+    area gets no highlights, so the model explores other spots instead of repeating them."""
+    req, research = ctx.user_request, ctx.destination_research
+    areas = research.recommended_areas or [req.destination]  # type: ignore[union-attr]
+    plan = []
+    for n in range(1, req.days + 1):
+        area = areas[(n - 1) % len(areas)]
+        entry: dict = {"day": n, "area": area}
+        highlights = research.area_highlights.get(area)  # type: ignore[union-attr]
+        if highlights and n <= len(areas):
+            entry["highlights"] = highlights
+        plan.append(entry)
+    return plan
+
+
 def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDraft:
     """Force the draft into shape (exactly `days` entries, sane costs) and derive the daily
     cost assumptions from the research reference costs — arithmetic stays in code."""
     req = ctx.user_request
     ref = ctx.destination_research.reference_costs  # type: ignore[union-attr]
     max_day_cost = 250.0 * req.travelers
+    plan = day_plan(ctx)
     by_day = {d.day: d for d in out.days}
     ordered = sorted(out.days, key=lambda d: d.day)
     days = []
@@ -77,7 +92,7 @@ def _normalize(out: ItineraryPlanningOutput, ctx: SharedContext) -> ItineraryDra
             src = ItineraryDayOutput(day=n, area=area, activities=[], estimated_cost_usd=0, free_alternative="")
         days.append(ItineraryDay(
             day=n,
-            area=clean_area(src.area) or req.destination,
+            area=plan[n - 1]["area"],  # the plan decides the area, not the model
             activities=[a.strip() for a in src.activities if a.strip()][:4],
             estimated_cost_usd=round(min(max_day_cost, max(0.0, src.estimated_cost_usd)), 2),
             free_alternative=src.free_alternative.strip(),
@@ -124,15 +139,18 @@ def revise(ctx: SharedContext, action_ids: list[str]) -> tuple[ItineraryDraft, T
 
 def _mock(ctx: SharedContext) -> ItineraryPlanningOutput:
     req = ctx.user_request
-    areas = ctx.destination_research.recommended_areas or [req.destination]  # type: ignore[union-attr]
     es = req.lang == "es"
     interests = req.interests or (["cultura", "gastronomía"] if es else ["culture", "food"])
     days = []
-    for n in range(1, req.days + 1):
+    for entry in day_plan(ctx):
+        n, area = entry["day"], entry["area"]
         topic = interests[(n - 1) % len(interests)]
-        area = areas[(n - 1) % len(areas)]
-        acts = ([f"Visita guiada de {topic}", f"Experiencia local de {topic}", "Paseo por el mercado"]
-                if es else [f"Guided {topic} visit", f"Local {topic} experience", "Stroll through the market"])
+        if entry.get("highlights"):
+            acts = [(f"Visita {h}" if es else f"Visit {h}") for h in entry["highlights"][:2]]
+        else:
+            acts = ([f"Visita guiada de {topic}", f"Experiencia local de {topic}"]
+                    if es else [f"Guided {topic} visit", f"Local {topic} experience"])
+        acts.append("Paseo por el mercado" if es else "Stroll through the market")
         days.append(ItineraryDayOutput(
             day=n, area=area, activities=acts, estimated_cost_usd=35 * req.travelers,
             free_alternative=(f"Recorrido a pie gratuito por {area}" if es else f"Free walking route around {area}"),

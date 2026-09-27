@@ -112,6 +112,8 @@ class DestinationResearch(BaseModel):
     # "catalog" = areas, highlights and costs from the curated table; "model" = all from the LLM.
     source: Literal["catalog", "model"] = "model"
     highlights: list[str] = Field(default_factory=list)
+    # Catalog only: which highlights belong to which area.
+    area_highlights: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ItineraryDay(BaseModel):

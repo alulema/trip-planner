@@ -33,6 +33,46 @@ SCENARIOS = [
                                  "interests": "arte,miradores", "lang": "es"}, False),
 ]
 
+GENERIC = {"market", "mercado", "temple", "templo", "street", "museum", "museo", "cathedral", "catedral",
+           "church", "iglesia", "palace", "palacio", "garden", "gardens", "jardin", "plaza", "square", "tower",
+           "bridge", "puente", "park", "parque", "street", "food", "shrine", "basilica", "mosque", "night"}
+
+
+def _tokens(name: str) -> set[str]:
+    words = re.findall(r"[\w'-]+", _fold(name))
+    return {w for w in words if len(w) >= 5 and w not in GENERIC}
+
+
+def _fold(text: str) -> str:
+    import unicodedata
+    text = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in text if not unicodedata.combining(c))
+
+
+def highlight_placement(ctx: dict) -> tuple[int, int, list[str]]:
+    """(highlights mentioned on their own day, highlights planned, misplaced mentions)."""
+    by_area = ctx["destination_research"].get("area_highlights") or {}
+    days = ctx["itinerary_draft"]["days"]
+    used = planned = 0
+    misplaced = []
+    seen_areas = set()
+    for d in days:
+        text = _fold(" ".join(d["activities"] + [d.get("free_alternative", "")]))
+        words = set(re.findall(r"[\w'-]+", text))
+        if d["area"] in by_area and d["area"] not in seen_areas:
+            seen_areas.add(d["area"])
+            for h in by_area[d["area"]]:
+                planned += 1
+                used += bool((_tokens(h) - _tokens(d["area"])) & words)
+        for area, hs in by_area.items():
+            if area == d["area"]:
+                continue
+            # Ignore words shared with an area name ("Arashiyama" Bamboo Grove), they prove nothing.
+            misplaced += [f"day {d['day']} ({d['area']}): {h}" for h in hs
+                          if (_tokens(h) - _tokens(area) - _tokens(d["area"])) & words]
+    return used, planned, misplaced
+
+
 CLAIMS_WITHIN = re.compile(r"within (your|the) budget|fits the budget|dentro del presupuesto", re.I)
 CLAIMS_OVER = re.compile(r"over budget|excede el presupuesto", re.I)
 
@@ -111,6 +151,11 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
     draft_days = ctx["itinerary_draft"]["days"]
     if all(d["estimated_cost_usd"] == 0 for d in draft_days) and not ctx["conflict_resolution"]["triggered"]:
         warnings.append(f"{name}: the model priced every day's activities at $0")
+    used, planned, misplaced = highlight_placement(ctx)
+    if planned and used < planned / 2:
+        warnings.append(f"{name}: itinerary mentions only {used}/{planned} planned highlights")
+    if misplaced:
+        warnings.append(f"{name}: highlights placed in the wrong area: {misplaced}")
     odd_areas = [a for a in ctx["destination_research"]["recommended_areas"] if len(a.split()) > 4]
     if odd_areas:
         warnings.append(f"{name}: area names look like descriptions: {odd_areas}")
@@ -126,6 +171,8 @@ def analyze(name: str, params: dict, expect_conflict: bool, run: dict) -> tuple[
         "conflict": ctx["conflict_resolution"],
         "areas": ctx["destination_research"]["recommended_areas"],
         "source": ctx["destination_research"].get("source", "model"),
+        "highlights_used": f"{used}/{planned}" if planned else "–",
+        "misplaced": len(misplaced),
         "draft_costs": [d["estimated_cost_usd"] for d in ctx["itinerary_draft"]["days"]],
         "reference_costs": ctx["destination_research"]["reference_costs"],
         "days": days,
@@ -151,7 +198,8 @@ def report(model: str, ready_s: float, results: list) -> str:
         lines += [f"- ❌ {f}" for f in fails] + [f"- ⚠️ {w}" for w in warns]
         if not m:
             continue
-        lines += [f"- Data source: **{m['source']}**",
+        lines += [f"- Data source: **{m['source']}** · highlights used on their day: {m['highlights_used']}"
+                  f" · misplaced: {m['misplaced']}",
                   f"- Areas: {', '.join(m['areas'])}",
                   f"- Reference costs: `{json.dumps(m['reference_costs'])}`",
                   f"- Activity cost per day (final draft): `{m['draft_costs']}`",

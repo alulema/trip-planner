@@ -132,6 +132,7 @@ async def _from_catalog(ctx: SharedContext, city: catalog.City, llm: LLMClient, 
         agent_notes=CATALOG_NOTES[req.lang],
         source="catalog",
         highlights=list(city.highlights),
+        area_highlights={a: list(hs) for a, hs in city.area_highlights},
     )
     return section, usage
 
